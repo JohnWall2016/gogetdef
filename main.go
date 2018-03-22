@@ -1,16 +1,12 @@
 package main
 
 import (
-	"io"
-	"io/ioutil"
-	"os"
+	"fmt"
+	"runtime"
 )
 
-func parseSingleFile(file []byte) {
-	
-}
-
 func main() {
-	
+	pc, file, line, ok := runtime.Caller(0)
+	fmt.Println(pc, file, line, ok)
 	//parseSingleFile(ioutil.ReadFile(
 }
