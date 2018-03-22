@@ -130,7 +130,7 @@ func readInterfaceType(it *ast.InterfaceType) string {
 }
 
 func readUnaryExpr(expr *ast.UnaryExpr) string {
-	return fmt.Sprintf("%s %s\n", expr.Op,  readExpr(expr.X))
+	return fmt.Sprintf("%s %s\n", expr.Op, readExpr(expr.X))
 }
 
 func readExpr(node ast.Expr) string {
@@ -203,7 +203,7 @@ func expandValueSpec(name string, v *ast.ValueSpec, kind ast.ObjKind) (decl stri
 			pos = nm.Pos()
 		}
 	}
-	
+
 	return
 }
 
@@ -222,7 +222,7 @@ func expandField(name string, field *ast.Field, kind ast.ObjKind) (decl string, 
 
 func expandDeclare(obj *ast.Object) (decl string, pos token.Pos) {
 	pos = obj.Decl.(ast.Node).Pos()
-	
+
 	switch d := obj.Decl.(type) {
 	case *ast.AssignStmt:
 		return expandAssignStmt(obj.Name, d, obj.Kind)
@@ -273,7 +273,7 @@ func findDeclareInFile(filename string, src []byte, offset int) (decl, pos strin
 	if match {
 		dpos := token.NoPos
 		decl, dpos = expandNode(path[0])
-		
+
 		if dpos == token.NoPos {
 			pos = ""
 		} else {
