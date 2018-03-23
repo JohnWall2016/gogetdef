@@ -43,7 +43,6 @@ func OverlayContext(orig *build.Context, overlay map[string][]byte) *build.Conte
 	ctxt.OpenFile = func(path string) (io.ReadCloser, error) {
 		// Fast path: names match exactly.
 		if content, ok := overlay[path]; ok {
-			fmt.Printf("of: %s\n", path)
 			return rc(content)
 		}
 
@@ -51,7 +50,6 @@ func OverlayContext(orig *build.Context, overlay map[string][]byte) *build.Conte
 		// alias, perhaps due to a symbolic link.
 		for filename, content := range overlay {
 			if sameFile(path, filename) {
-				fmt.Printf("of: %s\n", path)
 				return rc(content)
 			}
 		}
@@ -77,14 +75,12 @@ func OverlayContext(orig *build.Context, overlay map[string][]byte) *build.Conte
 		return "", false
 	}
 	ctxt.ReadDir = func(dir string) (fis []os.FileInfo, err error) {
-		fmt.Printf("readdir: %s\n", dir)
 		fis, err = ReadDir(orig, dir)
 		if err != nil {
 			return
 		}
 		for filename, bytes := range overlay {
 			if rel, ok := hasSubdir(dir, filename); ok {
-				fmt.Printf("filename: %s\n", filename)
 				idx := strings.IndexRune(rel, filepath.Separator)
 				if idx < 0 { // file
 					fis = append(fis, &fileinfo{

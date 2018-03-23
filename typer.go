@@ -71,6 +71,20 @@ func (ti *typeInfo) readDir(path string) ([]os.FileInfo, error) {
 	return ioutil.ReadDir(path)
 }
 
+func (ti *typeInfo) openFile(path string) ([]byte, error) {
+	if f := ti.ctxt.OpenFile; f != nil {
+		file, err := f(path)
+		if err == nil {
+			defer file.Close()
+			buf, err := ioutil.ReadAll(file)
+			if err == nil {
+				return buf, nil
+			}
+		}
+	}
+	return ioutil.ReadFile(path)
+}
+
 func (ti *typeInfo) parseDir(dir string, filter func(os.FileInfo) bool, mode parser.Mode) (pkgs map[string]*ast.Package, first error) {
 	list, err := ti.readDir(dir)
 	if err != nil {
@@ -81,7 +95,11 @@ func (ti *typeInfo) parseDir(dir string, filter func(os.FileInfo) bool, mode par
 	for _, d := range list {
 		if strings.HasSuffix(d.Name(), ".go") && (filter == nil || filter(d)) {
 			filename := filepath.Join(dir, d.Name())
-			if src, err := parser.ParseFile(ti.fset, filename, nil, mode); err == nil {
+			buf, err := ti.openFile(filename)
+			if err != nil {
+				buf = nil
+			}
+			if src, err := parser.ParseFile(ti.fset, filename, buf, mode); err == nil {
 				name := src.Name.Name
 				pkg, found := pkgs[name]
 				if !found {
