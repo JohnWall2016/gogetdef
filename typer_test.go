@@ -4,6 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 	"runtime"
+	"bytes"
+	"io/ioutil"
+	"fmt"
 )
 
 func getSrcCodeDir() string {
@@ -51,6 +54,24 @@ func TestFindDeclare(t *testing.T) {
 		t.Logf("%s", err.Error())
 	}
 	decl, pos, err = FindDeclare(testFile, 196, nil)
+	if err == nil {
+		t.Logf("%s, %s", decl, pos)
+	} else {
+		t.Logf("%s", err.Error())
+	}
+}
+
+func TestOverlayArchive(t *testing.T) {
+	var buf bytes.Buffer
+	testFile := filepath.Join(getTestDataDir(), "file2.go")
+	s := testFile + "\n"
+	buf.Write([]byte(s))
+	buf2, _ := ioutil.ReadFile(testFile)
+	s = fmt.Sprintf("%d\n", len(buf2))
+	buf.Write([]byte(s))
+	buf.Write(buf2)
+
+	decl, pos, err := FindDeclare(testFile, 169, &buf)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {
