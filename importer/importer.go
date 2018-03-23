@@ -4,7 +4,7 @@
 
 // Package srcimporter implements importing directly
 // from source files rather than installed packages.
-package srcimporter
+package importer
 
 import (
 	"fmt"
