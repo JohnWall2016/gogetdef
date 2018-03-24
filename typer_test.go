@@ -23,37 +23,37 @@ func getTestDataDir() string {
 
 func TestFindDeclare(t *testing.T) {
 	testFile := filepath.Join(getTestDataDir(), "file2.go")
-	decl, pos, err := FindDeclare(testFile, 182, nil)//169)
+	decl, pos, err := findDeclare(testFile, 169, nil)//169)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = FindDeclare(testFile, 189, nil)//177)
+	decl, pos, err = findDeclare(testFile, 177, nil)//177)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = FindDeclare(testFile, 158, nil)//146)
+	decl, pos, err = findDeclare(testFile, 146, nil)//146)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = FindDeclare(testFile, 154, nil)//146)
+	decl, pos, err = findDeclare(testFile, 142, nil)//146)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = FindDeclare(testFile, 33, nil)
+	decl, pos, err = findDeclare(testFile, 29, nil)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = FindDeclare(testFile, 196, nil)
+	decl, pos, err = findDeclare(testFile, 203, nil)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {
@@ -71,7 +71,7 @@ func TestOverlayArchive(t *testing.T) {
 	buf.Write([]byte(s))
 	buf.Write(buf2)
 
-	decl, pos, err := FindDeclare(testFile, 169, &buf)
+	decl, pos, err := findDeclare(testFile, 169, &buf)
 	if err == nil {
 		t.Logf("%s, %s", decl, pos)
 	} else {

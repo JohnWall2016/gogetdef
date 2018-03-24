@@ -4,6 +4,6 @@ import (
 	"fmt"
 )
 
-func puts(msg string) {
+func puts(msg ...interface{}) {
 	fmt.Println(msg)
 }

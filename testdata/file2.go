@@ -11,5 +11,5 @@ func func1() {
 	dddd = aaaa
 	fmt.Printf("%s\n", aaaa)
 	fmt.Sprintf("%s\n", strings.Title(aaaa))
-	puts("Hello World")
+	puts("Hello World", dddd)
 }
