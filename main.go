@@ -50,7 +50,7 @@ func main() {
 
 	fmt.Println("gogetdef-return")
 	fmt.Println(pos)
-	fmt.Println(decl)
+	fmt.Print(decl)
 }
 
 func parsePos(p string) (filename string, offset int64, err error) {

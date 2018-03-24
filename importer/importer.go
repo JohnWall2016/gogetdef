@@ -24,6 +24,7 @@ type Importer struct {
 	sizes    types.Sizes
 	packages map[string]*types.Package
 	files    map[string]*ast.File
+	info     *types.Info
 }
 
 // NewImporter returns a new Importer for the given context, file set, and map
@@ -32,13 +33,14 @@ type Importer struct {
 // non-nil file system functions, they are used instead of the regular package
 // os functions. The file set is used to track position information of package
 // files; and imported packages are added to the packages map.
-func New(ctxt *build.Context, fset *token.FileSet, files map[string]*ast.File) *Importer {
+func New(ctxt *build.Context, fset *token.FileSet, files map[string]*ast.File, info *types.Info) *Importer {
 	return &Importer{
 		ctxt:     ctxt,
 		fset:     fset,
 		sizes:    types.SizesFor(ctxt.Compiler, ctxt.GOARCH), // uses go/types default if GOARCH not found
 		packages: make(map[string]*types.Package),
 		files:    files,
+		info:     info,
 	}
 }
 
@@ -48,7 +50,7 @@ var importing types.Package
 
 // Import(path) is a shortcut for ImportFrom(path, "", 0).
 func (p *Importer) Import(path string) (*types.Package, error) {
-	return p.ImportFrom(path, "", 0)
+	return p.ImportFrom(path, "")
 }
 
 // ImportFrom imports the package with the given import path resolved from the given srcDir,
@@ -57,11 +59,7 @@ func (p *Importer) Import(path string) (*types.Package, error) {
 // maintained with the importer. The import mode must be zero but is otherwise ignored.
 // Packages that are not comprised entirely of pure Go files may fail to import because the
 // type checker may not be able to determine all exported entities (e.g. due to cgo dependencies).
-func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*types.Package, error) {
-	if mode != 0 {
-		panic("non-zero import mode")
-	}
-
+func (p *Importer) ImportFrom(path, srcDir string) (*types.Package, error) {
 	// determine package path (do vendor resolution)
 	var bp *build.Package
 	var err error
@@ -143,7 +141,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 		Importer: p,
 		Sizes:    p.sizes,
 	}
-	pkg, err = conf.Check(bp.ImportPath, p.fset, files, nil)
+	pkg, err = conf.Check(bp.ImportPath, p.fset, files, p.info)
 	if err != nil {
 		// If there was a hard error it is possibly unsafe
 		// to use the package as it may not be fully populated.
@@ -181,29 +179,28 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 			mutex.Unlock()
 			if ok {
 				files[i], errors[i] = file, nil
-			}
-			
-			if open != nil {
-				src, err := open(filepath)
-				if err != nil {
-					errors[i] = fmt.Errorf("opening package file %s failed (%v)", filepath, err)
-					return
-				}
-				files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, 0)
-				src.Close() // ignore Close error - parsing may have succeeded which is all we need
 			} else {
-				// Special-case when ctxt doesn't provide a custom OpenFile and use the
-				// parser's file reading mechanism directly. This appears to be quite a
-				// bit faster than opening the file and providing an io.ReaderCloser in
-				// both cases.
-				// TODO(gri) investigate performance difference (issue #19281)
-				files[i], errors[i] = parser.ParseFile(p.fset, filepath, nil, 0)
-			}
-
-			if errors[i] == nil {
-				mutex.Lock()
-				p.files[filepath] = files[i]
-				mutex.Unlock()
+				if open != nil {
+					src, err := open(filepath)
+					if err != nil {
+						errors[i] = fmt.Errorf("opening package file %s failed (%v)", filepath, err)
+						return
+					}
+					files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, parser.AllErrors)
+					src.Close() // ignore Close error - parsing may have succeeded which is all we need
+				} else {
+					// Special-case when ctxt doesn't provide a custom OpenFile and use the
+					// parser's file reading mechanism directly. This appears to be quite a
+					// bit faster than opening the file and providing an io.ReaderCloser in
+					// both cases.
+					// TODO(gri) investigate performance difference (issue #19281)
+					files[i], errors[i] = parser.ParseFile(p.fset, filepath, nil, 0)
+				}
+				if errors[i] == nil {
+					mutex.Lock()
+					p.files[filepath] = files[i]
+					mutex.Unlock()
+				}
 			}
 		}(i, p.joinPath(dir, filename))
 	}

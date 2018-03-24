@@ -28,6 +28,7 @@ type typeInfo struct {
 	ctxt     *build.Context
 	conf     *types.Config
 	files    map[string]*ast.File
+	errors   string
 }
 
 func newTypeInfo(overlay map[string][]byte) *typeInfo {
@@ -40,12 +41,19 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 			Scopes:     make(map[ast.Node]*types.Scope),
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
-		fset: token.NewFileSet(),
-		ctxt: importer.OverlayContext(&build.Default, overlay),
+		fset:  token.NewFileSet(),
+		ctxt:  importer.OverlayContext(&build.Default, overlay),
 		files: make(map[string]*ast.File),
 	}
-	info.importer = importer.New(info.ctxt, info.fset, info.files)
-	info.conf = &types.Config{Importer: info.importer}
+	info.importer = importer.New(info.ctxt, info.fset, info.files, &info.Info)
+	info.conf = &types.Config{
+		Importer:         info.importer,
+		IgnoreFuncBodies: false,
+		FakeImportC:      true,
+		Error: func(err error) {
+			info.errors += err.Error() + "\n"
+		},
+	}
 	return info
 }
 
@@ -120,8 +128,7 @@ func (ti *typeInfo) parseDir(dir string, mode parser.Mode) (pkgs map[string]*ast
 		if strings.HasSuffix(d.Name(), ".go") {
 			filename := filepath.Join(dir, d.Name())
 
-			var err error
-			src, ok :=  ti.files[filename]
+			src, ok := ti.files[filename]
 			if !ok {
 				buf, err := ti.openFile(filename)
 				if err != nil {
@@ -132,7 +139,7 @@ func (ti *typeInfo) parseDir(dir string, mode parser.Mode) (pkgs map[string]*ast
 					ti.files[filename] = src
 				}
 			}
-			
+
 			if err == nil {
 				name := src.Name.Name
 				pkg, found := pkgs[name]
@@ -168,7 +175,7 @@ func sameFile(a, b string) bool {
 }
 
 func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, err error) {
-	pkgs, err := ti.parseDir(filepath.Dir(filename), parser.ParseComments)
+	pkgs, err := ti.parseDir(filepath.Dir(filename), parser.ParseComments|parser.AllErrors)
 	if err != nil {
 		return
 	}
@@ -184,6 +191,9 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 				pkgName = pname
 				astFile = afile
 			}
+		}
+		if pkgName != "" {
+			break
 		}
 	}
 
@@ -212,8 +222,14 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 			return ti.ident(n)
 		case *ast.ImportSpec:
 			return ti.importSpec(n)
+		default:
+			if cerr == nil {
+				cerr = errors.New(fmt.Sprintf("can't found the node: %#v", node))
+			}
+			break
 		}
 	}
+
 	return "", "", cerr
 }
 
