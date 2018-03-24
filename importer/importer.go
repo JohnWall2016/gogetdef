@@ -23,6 +23,7 @@ type Importer struct {
 	fset     *token.FileSet
 	sizes    types.Sizes
 	packages map[string]*types.Package
+	files    map[string]*ast.File
 }
 
 // NewImporter returns a new Importer for the given context, file set, and map
@@ -31,12 +32,13 @@ type Importer struct {
 // non-nil file system functions, they are used instead of the regular package
 // os functions. The file set is used to track position information of package
 // files; and imported packages are added to the packages map.
-func New(ctxt *build.Context, fset *token.FileSet, packages map[string]*types.Package) *Importer {
+func New(ctxt *build.Context, fset *token.FileSet, files map[string]*ast.File) *Importer {
 	return &Importer{
 		ctxt:     ctxt,
 		fset:     fset,
 		sizes:    types.SizesFor(ctxt.Compiler, ctxt.GOARCH), // uses go/types default if GOARCH not found
-		packages: packages,
+		packages: make(map[string]*types.Package),
+		files:    files,
 	}
 }
 
@@ -169,9 +171,18 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 
 	var wg sync.WaitGroup
 	wg.Add(len(filenames))
+	var mutex sync.Mutex
 	for i, filename := range filenames {
 		go func(i int, filepath string) {
 			defer wg.Done()
+
+			mutex.Lock()
+			file, ok := p.files[filepath]
+			mutex.Unlock()
+			if ok {
+				files[i], errors[i] = file, nil
+			}
+			
 			if open != nil {
 				src, err := open(filepath)
 				if err != nil {
@@ -187,6 +198,12 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 				// both cases.
 				// TODO(gri) investigate performance difference (issue #19281)
 				files[i], errors[i] = parser.ParseFile(p.fset, filepath, nil, 0)
+			}
+
+			if errors[i] == nil {
+				mutex.Lock()
+				p.files[filepath] = files[i]
+				mutex.Unlock()
 			}
 		}(i, p.joinPath(dir, filename))
 	}

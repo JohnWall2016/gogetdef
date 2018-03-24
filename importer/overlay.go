@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -75,22 +76,23 @@ func OverlayContext(orig *build.Context, overlay map[string][]byte) *build.Conte
 		return "", false
 	}
 	ctxt.ReadDir = func(dir string) (fis []os.FileInfo, err error) {
-		fis, err = ReadDir(orig, dir)
+		fis1, err := ReadDir(orig, dir)
 		if err != nil {
 			return
 		}
+		fis2 := []os.FileInfo{}
 		for filename, bytes := range overlay {
 			if rel, ok := hasSubdir(dir, filename); ok {
 				idx := strings.IndexRune(rel, filepath.Separator)
 				if idx < 0 { // file
-					fis = append(fis, &fileinfo{
+					fis2 = append(fis2, &fileinfo{
 						name: rel,
 						size: int64(len(bytes)),
 						dir:  false,
 						mode: 0644,
 					})
 				} else { // dir
-					fis = append(fis, &fileinfo{
+					fis2 = append(fis2, &fileinfo{
 						name: rel[:idx],
 						dir:  true,
 						mode: 0755,
@@ -98,6 +100,22 @@ func OverlayContext(orig *build.Context, overlay map[string][]byte) *build.Conte
 				}
 			}
 		}
+		if len(fis2) > 0 {
+			m := make(map[string]bool)
+			for _, fi := range fis2 {
+				m[fi.Name()] = true
+				fis = append(fis, fi)
+			}
+			for _, fi := range fis1 {
+				if !m[fi.Name()] {
+					fis = append(fis, fi)
+				}
+			}
+			sort.Slice(fis, func(i int, j int) bool { return fis[i].Name() < fis[j].Name() })
+		} else {
+			return fis1, nil
+		}
+		
 		return
 	}
 	return ctxt
@@ -171,7 +189,7 @@ func ParseOverlayArchive(archive io.Reader) (map[string][]byte, error) {
 
 		// Read file content.
 		content := make([]byte, size)
-		
+
 		if _, err := io.ReadFull(r, content); err != nil {
 			return nil, fmt.Errorf("reading archive file %s: %v", filename, err)
 		}

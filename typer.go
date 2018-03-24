@@ -23,11 +23,11 @@ var _ = build.Import
 
 type typeInfo struct {
 	types.Info
-	fset       *token.FileSet
-	importer   *importer.Importer
-	ctxt       *build.Context
-	conf       *types.Config
-	importPkgs map[string]*types.Package
+	fset     *token.FileSet
+	importer *importer.Importer
+	ctxt     *build.Context
+	conf     *types.Config
+	files    map[string]*ast.File
 }
 
 func newTypeInfo(overlay map[string][]byte) *typeInfo {
@@ -40,18 +40,42 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 			Scopes:     make(map[ast.Node]*types.Scope),
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
-		fset:       token.NewFileSet(),
-		ctxt:       importer.OverlayContext(&build.Default, overlay),
-		importPkgs: make(map[string]*types.Package),
+		fset: token.NewFileSet(),
+		ctxt: importer.OverlayContext(&build.Default, overlay),
+		files: make(map[string]*ast.File),
 	}
-	info.importer = importer.New(info.ctxt, info.fset, info.importPkgs)
+	info.importer = importer.New(info.ctxt, info.fset, info.files)
 	info.conf = &types.Config{Importer: info.importer}
 	return info
 }
 
 func (ti *typeInfo) ident(id *ast.Ident) (decl, pos string, err error) {
 	obj := ti.ObjectOf(id)
-	return obj.String(), ti.fset.Position(obj.Pos()).String(), nil
+	decl = obj.String()
+
+	if p := ti.fset.Position(obj.Pos()); p.IsValid() {
+		pos = p.String()
+	}
+
+	if file := ti.fset.File(obj.Pos()); file != nil {
+		if astfile, ok := ti.files[file.Name()]; ok {
+			nodes, _ := astutil.PathEnclosingInterval(astfile, obj.Pos(), obj.Pos())
+			for _, node := range nodes {
+				switch node.(type) {
+				case *ast.Ident:
+					// continue ascending AST (searching for parent node of the identifier))
+					continue
+				case *ast.FuncDecl, *ast.GenDecl, *ast.Field, *ast.TypeSpec, *ast.ValueSpec:
+					// found the parent node
+				default:
+					break
+				}
+				decl = formatNode(node, obj, ti.fset, false)
+				break
+			}
+		}
+	}
+	return
 }
 
 func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (decl, pos string, err error) {
@@ -85,7 +109,7 @@ func (ti *typeInfo) openFile(path string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }
 
-func (ti *typeInfo) parseDir(dir string, filter func(os.FileInfo) bool, mode parser.Mode) (pkgs map[string]*ast.Package, first error) {
+func (ti *typeInfo) parseDir(dir string, mode parser.Mode) (pkgs map[string]*ast.Package, first error) {
 	list, err := ti.readDir(dir)
 	if err != nil {
 		return nil, err
@@ -93,13 +117,23 @@ func (ti *typeInfo) parseDir(dir string, filter func(os.FileInfo) bool, mode par
 
 	pkgs = make(map[string]*ast.Package)
 	for _, d := range list {
-		if strings.HasSuffix(d.Name(), ".go") && (filter == nil || filter(d)) {
+		if strings.HasSuffix(d.Name(), ".go") {
 			filename := filepath.Join(dir, d.Name())
-			buf, err := ti.openFile(filename)
-			if err != nil {
-				buf = nil
+
+			var err error
+			src, ok :=  ti.files[filename]
+			if !ok {
+				buf, err := ti.openFile(filename)
+				if err != nil {
+					buf = nil
+				}
+				src, err = parser.ParseFile(ti.fset, filename, buf, mode)
+				if err == nil {
+					ti.files[filename] = src
+				}
 			}
-			if src, err := parser.ParseFile(ti.fset, filename, buf, mode); err == nil {
+			
+			if err == nil {
 				name := src.Name.Name
 				pkg, found := pkgs[name]
 				if !found {
@@ -119,11 +153,6 @@ func (ti *typeInfo) parseDir(dir string, filter func(os.FileInfo) bool, mode par
 	return
 }
 
-func (ti *typeInfo) importPkg(path string, srcDir string) (*types.Package, error) {
-	fmt.Printf("%s, %s\n", path, srcDir)
-	return ti.importer.ImportFrom(path, srcDir, 0)
-}
-
 func sameFile(a, b string) bool {
 	if filepath.Base(a) != filepath.Base(b) {
 		// We only care about symlinks for the GOPATH itself. File
@@ -139,7 +168,7 @@ func sameFile(a, b string) bool {
 }
 
 func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, err error) {
-	pkgs, err := ti.parseDir(filepath.Dir(filename), nil, parser.ParseComments)
+	pkgs, err := ti.parseDir(filepath.Dir(filename), parser.ParseComments)
 	if err != nil {
 		return
 	}
@@ -186,6 +215,28 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 		}
 	}
 	return "", "", cerr
+}
+
+func findTypeSpec(decl *ast.GenDecl, pos token.Pos) *ast.TypeSpec {
+	for _, spec := range decl.Specs {
+		typeSpec := spec.(*ast.TypeSpec)
+		if typeSpec.Pos() == pos {
+			return typeSpec
+		}
+	}
+	return nil
+}
+
+func findVarSpec(decl *ast.GenDecl, pos token.Pos) *ast.ValueSpec {
+	for _, spec := range decl.Specs {
+		varSpec := spec.(*ast.ValueSpec)
+		for _, ident := range varSpec.Names {
+			if ident.Pos() == pos {
+				return varSpec
+			}
+		}
+	}
+	return nil
 }
 
 func FindDeclare(filename string, offset int, archive io.Reader) (decl, pos string, err error) {
