@@ -182,11 +182,10 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 
 	var pkgName string
 	var astFile *ast.File
-	var astFiles []*ast.File
+	astFiles := make(map[string][]*ast.File)
 	for pname, pkg := range pkgs {
-		astFiles = make([]*ast.File, 0, len(pkg.Files))
 		for fname, afile := range pkg.Files {
-			astFiles = append(astFiles, afile)
+			astFiles[pname] = append(astFiles[pname], afile)
 			if sameFile(filename, fname) {
 				pkgName = pname
 				astFile = afile
@@ -201,7 +200,17 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 		return "", "", errors.New("can't get package name")
 	}
 
-	_, cerr := ti.conf.Check(pkgName, ti.fset, astFiles, &ti.Info)
+	tpkg := types.NewPackage(pkgName, "")
+
+	if strings.HasSuffix(pkgName, "_test") {
+		pkg := strings.TrimSuffix(pkgName, "_test")
+		if s, ok := astFiles[pkg]; ok {
+			tpkg, _ = ti.conf.Check(pkg, ti.fset, s, &ti.Info)
+			tpkg.SetName(pkgName)
+		}
+	}
+
+	cerr := types.NewChecker(ti.conf, ti.fset, tpkg, &ti.Info).Files(astFiles[pkgName])
 
 	tokFile := ti.fset.File(astFile.Pos())
 	if tokFile == nil {

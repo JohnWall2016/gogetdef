@@ -374,7 +374,7 @@ You can install gogetdef with 'go get -u github.com/JohnWall2016/gogetdef'."
                          (format "-pos=%s" posn)))
   (prog1
       (with-current-buffer out
-        (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n" t))
+        (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n" nil))
     (kill-buffer out))))
 
 (defun gogetdef-jump (point &optional other-window)
@@ -386,8 +386,8 @@ You can install gogetdef with 'go get -u github.com/JohnWall2016/gogetdef'."
              (pos (nth 1 iod)))
         (if (not (string= "gogetdef-return" sig))
             (message "%s" (mapconcat #'identity iod "\n"))
-          (if (not pos)
-              (message "No definition found for expression at point")
+          (if (or (not pos) (string= pos ""))
+              (message "No definition found for expression at point %S" iod)
             (push-mark)
             (if (eval-when-compile (fboundp 'xref-push-marker-stack))
                 ;; TODO: Integrate this facility with XRef.
@@ -406,7 +406,7 @@ You can install gogetdef with 'go get -u github.com/JohnWall2016/gogetdef'."
         (if (not (string= "gogetdef-return" sig))
             (message "%s" (mapconcat #'identity iod "\n"))
           (if (not dcl)
-              (message "No definition found for expression at point")
+              (message "No definition found for expression at point %S" iod)
             (message "%s" (mapconcat #'identity dcl "\n")))))
     (file-error (message "Could not run gogetdef binary"))))
 
