@@ -50,7 +50,7 @@ func OverlayContext(orig *build.Context, overlay map[string][]byte) *build.Conte
 		// Slow path: check for same file under a different
 		// alias, perhaps due to a symbolic link.
 		for filename, content := range overlay {
-			if sameFile(path, filename) {
+			if SameFile(path, filename) {
 				return rc(content)
 			}
 		}

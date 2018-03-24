@@ -11,7 +11,6 @@ import (
 	"go/types"
 	"golang.org/x/tools/go/ast/astutil"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -94,20 +93,6 @@ func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (decl, pos string, err erro
 	return "package " + bpkg.Name, bpkg.Dir, nil
 }
 
-func sameFile(a, b string) bool {
-	if filepath.Base(a) != filepath.Base(b) {
-		// We only care about symlinks for the GOPATH itself. File
-		// names need to match.
-		return false
-	}
-	if ai, err := os.Stat(a); err == nil {
-		if bi, err := os.Stat(b); err == nil {
-			return os.SameFile(ai, bi)
-		}
-	}
-	return false
-}
-
 func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, err error) {
 	pkgs, err := ti.importer.ParseDir(filepath.Dir(filename), parser.ParseComments|parser.AllErrors)
 	if err != nil {
@@ -120,7 +105,7 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 	for pname, pkg := range pkgs {
 		for fname, afile := range pkg.Files {
 			astFiles[pname] = append(astFiles[pname], afile)
-			if sameFile(filename, fname) {
+			if importer.SameFile(filename, fname) {
 				pkgName = pname
 				astFile = afile
 			}
