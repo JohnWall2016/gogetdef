@@ -33,7 +33,7 @@ func main() {
 	filename, offset, err := parsePos(*pos)
 	//fmt.Printf("%s:%d\n", filename, offset)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Print(err)
 		os.Exit(1)
 	}
 
