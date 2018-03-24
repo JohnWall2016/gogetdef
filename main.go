@@ -44,7 +44,7 @@ func main() {
 
 	decl, pos, err := FindDeclare(filename, int(offset), archive)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 
