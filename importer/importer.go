@@ -19,12 +19,13 @@ import (
 
 // An Importer provides the context for importing packages from source code.
 type Importer struct {
-	ctxt     *build.Context
-	fset     *token.FileSet
-	sizes    types.Sizes
-	packages map[string]*types.Package
-	files    map[string]*ast.File
-	info     *types.Info
+	ctxt         *build.Context
+	fset         *token.FileSet
+	sizes        types.Sizes
+	packages     map[string]*types.Package
+	files        map[string]*ast.File
+	info         *types.Info
+	IncludeTests func(pkg string) bool
 }
 
 // NewImporter returns a new Importer for the given context, file set, and map
@@ -124,6 +125,9 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 	var filenames []string
 	filenames = append(filenames, bp.GoFiles...)
 	filenames = append(filenames, bp.CgoFiles...)
+	if p.IncludeTests != nil && p.IncludeTests(bp.ImportPath) {
+		filenames = append(filenames, bp.TestGoFiles...)
+	}
 
 	files, err := p.parseFiles(bp.Dir, filenames)
 	if err != nil {

@@ -200,16 +200,18 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 		return "", "", errors.New("can't get package name")
 	}
 
-	tpkg := types.NewPackage(pkgName, "")
-
-	if strings.HasSuffix(pkgName, "_test") {
-		pkg := strings.TrimSuffix(pkgName, "_test")
-		if s, ok := astFiles[pkg]; ok {
-			tpkg, _ = ti.conf.Check(pkg, ti.fset, s, &ti.Info)
-			tpkg.SetName(pkgName)
+	if strings.HasSuffix(filename, "_test.go") {
+		ti.importer.IncludeTests = func(pkg string) bool {
+			if pkg == strings.TrimSuffix(pkgName, "_test") {
+				return true
+			}
+			return false
 		}
+	} else {
+		ti.importer.IncludeTests = nil
 	}
 
+	tpkg := types.NewPackage(pkgName, "")
 	cerr := types.NewChecker(ti.conf, ti.fset, tpkg, &ti.Info).Files(astFiles[pkgName])
 
 	tokFile := ti.fset.File(astFile.Pos())
@@ -233,12 +235,12 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 			return ti.importSpec(n)
 		default:
 			if cerr == nil {
-				cerr = errors.New(fmt.Sprintf("can't found the node: %#v", node))
+				//cerr = errors.New(fmt.Sprintf("can't found the node: %#v", node))
+				cerr = errors.New("can't found definition")
 			}
 			break
 		}
 	}
-
 	return "", "", cerr
 }
 
