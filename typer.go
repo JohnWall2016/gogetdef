@@ -171,7 +171,7 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 		default:
 			if cerr == nil {
 				//cerr = errors.New(fmt.Sprintf("can't found the node: %#v", node))
-				cerr = errors.New("can't found definition")
+				cerr = errors.New("can't find definition")
 			}
 			break
 		}
