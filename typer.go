@@ -11,7 +11,6 @@ import (
 	"go/types"
 	"golang.org/x/tools/go/ast/astutil"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,7 +18,6 @@ import (
 )
 
 var _ = fmt.Printf
-var _ = build.Import
 
 type typeInfo struct {
 	types.Info
@@ -96,70 +94,6 @@ func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (decl, pos string, err erro
 	return "package " + bpkg.Name, bpkg.Dir, nil
 }
 
-func (ti *typeInfo) readDir(path string) ([]os.FileInfo, error) {
-	if f := ti.ctxt.ReadDir; f != nil {
-		return f(path)
-	}
-	return ioutil.ReadDir(path)
-}
-
-func (ti *typeInfo) openFile(path string) ([]byte, error) {
-	if f := ti.ctxt.OpenFile; f != nil {
-		file, err := f(path)
-		if err == nil {
-			defer file.Close()
-			buf, err := ioutil.ReadAll(file)
-			if err == nil {
-				return buf, nil
-			}
-		}
-	}
-	return ioutil.ReadFile(path)
-}
-
-func (ti *typeInfo) parseDir(dir string, mode parser.Mode) (pkgs map[string]*ast.Package, first error) {
-	list, err := ti.readDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgs = make(map[string]*ast.Package)
-	for _, d := range list {
-		if strings.HasSuffix(d.Name(), ".go") {
-			filename := filepath.Join(dir, d.Name())
-
-			src, ok := ti.files[filename]
-			if !ok {
-				buf, err := ti.openFile(filename)
-				if err != nil {
-					buf = nil
-				}
-				src, err = parser.ParseFile(ti.fset, filename, buf, mode)
-				if err == nil {
-					ti.files[filename] = src
-				}
-			}
-
-			if err == nil {
-				name := src.Name.Name
-				pkg, found := pkgs[name]
-				if !found {
-					pkg = &ast.Package{
-						Name:  name,
-						Files: make(map[string]*ast.File),
-					}
-					pkgs[name] = pkg
-				}
-				pkg.Files[filename] = src
-			} else if first == nil {
-				first = err
-			}
-		}
-	}
-
-	return
-}
-
 func sameFile(a, b string) bool {
 	if filepath.Base(a) != filepath.Base(b) {
 		// We only care about symlinks for the GOPATH itself. File
@@ -175,7 +109,7 @@ func sameFile(a, b string) bool {
 }
 
 func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, err error) {
-	pkgs, err := ti.parseDir(filepath.Dir(filename), parser.ParseComments|parser.AllErrors)
+	pkgs, err := ti.importer.ParseDir(filepath.Dir(filename), parser.ParseComments|parser.AllErrors)
 	if err != nil {
 		return
 	}
@@ -201,8 +135,9 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 	}
 
 	if strings.HasSuffix(filename, "_test.go") {
+		rpkg := strings.TrimSuffix(pkgName, "_test")
 		ti.importer.IncludeTests = func(pkg string) bool {
-			if pkg == strings.TrimSuffix(pkgName, "_test") {
+			if pkg == rpkg {
 				return true
 			}
 			return false
@@ -244,29 +179,7 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 	return "", "", cerr
 }
 
-func findTypeSpec(decl *ast.GenDecl, pos token.Pos) *ast.TypeSpec {
-	for _, spec := range decl.Specs {
-		typeSpec := spec.(*ast.TypeSpec)
-		if typeSpec.Pos() == pos {
-			return typeSpec
-		}
-	}
-	return nil
-}
-
-func findVarSpec(decl *ast.GenDecl, pos token.Pos) *ast.ValueSpec {
-	for _, spec := range decl.Specs {
-		varSpec := spec.(*ast.ValueSpec)
-		for _, ident := range varSpec.Names {
-			if ident.Pos() == pos {
-				return varSpec
-			}
-		}
-	}
-	return nil
-}
-
-func FindDeclare(filename string, offset int, archive io.Reader) (decl, pos string, err error) {
+func findDeclare(filename string, offset int, archive io.Reader) (decl, pos string, err error) {
 	var overlay map[string][]byte
 	if archive != nil {
 		overlay, err = importer.ParseOverlayArchive(archive)

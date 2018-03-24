@@ -176,3 +176,25 @@ func formatNode(n ast.Node, obj types.Object, fset *token.FileSet, showUnexporte
 	}
 	return buf.String()
 }
+
+func findTypeSpec(decl *ast.GenDecl, pos token.Pos) *ast.TypeSpec {
+	for _, spec := range decl.Specs {
+		typeSpec := spec.(*ast.TypeSpec)
+		if typeSpec.Pos() == pos {
+			return typeSpec
+		}
+	}
+	return nil
+}
+
+func findVarSpec(decl *ast.GenDecl, pos token.Pos) *ast.ValueSpec {
+	for _, spec := range decl.Specs {
+		varSpec := spec.(*ast.ValueSpec)
+		for _, ident := range varSpec.Names {
+			if ident.Pos() == pos {
+				return varSpec
+			}
+		}
+	}
+	return nil
+}

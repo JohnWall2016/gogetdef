@@ -13,7 +13,10 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -243,4 +246,68 @@ func (p *Importer) joinPath(elem ...string) string {
 		return f(elem...)
 	}
 	return filepath.Join(elem...)
+}
+
+func (p *Importer) readDir(path string) ([]os.FileInfo, error) {
+	if f := p.ctxt.ReadDir; f != nil {
+		return f(path)
+	}
+	return ioutil.ReadDir(path)
+}
+
+func (p *Importer) openFile(path string) ([]byte, error) {
+	if f := p.ctxt.OpenFile; f != nil {
+		file, err := f(path)
+		if err == nil {
+			defer file.Close()
+			buf, err := ioutil.ReadAll(file)
+			if err == nil {
+				return buf, nil
+			}
+		}
+	}
+	return ioutil.ReadFile(path)
+}
+
+func (p *Importer) ParseDir(dir string, mode parser.Mode) (pkgs map[string]*ast.Package, first error) {
+	list, err := p.readDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	pkgs = make(map[string]*ast.Package)
+	for _, d := range list {
+		if strings.HasSuffix(d.Name(), ".go") {
+			filename := filepath.Join(dir, d.Name())
+
+			src, ok := p.files[filename]
+			if !ok {
+				buf, err := p.openFile(filename)
+				if err != nil {
+					buf = nil
+				}
+				src, err = parser.ParseFile(p.fset, filename, buf, mode)
+				if err == nil {
+					p.files[filename] = src
+				}
+			}
+
+			if err == nil {
+				name := src.Name.Name
+				pkg, found := pkgs[name]
+				if !found {
+					pkg = &ast.Package{
+						Name:  name,
+						Files: make(map[string]*ast.File),
+					}
+					pkgs[name] = pkg
+				}
+				pkg.Files[filename] = src
+			} else if first == nil {
+				first = err
+			}
+		}
+	}
+
+	return
 }
