@@ -190,10 +190,20 @@ func ParseOverlayArchive(archive io.Reader) (map[string][]byte, error) {
 		// Read file content.
 		content := make([]byte, size)
 
-		if _, err := io.ReadFull(r, content); err != nil {
-			return nil, fmt.Errorf("reading archive file %s: %v", filename, err)
+		i := 0
+		for size > 0 {
+			b, err := r.ReadByte()
+			if err != nil {
+				return nil, fmt.Errorf("reading archive file %s: %v", filename, err)
+			}
+			if b != '\r' {
+				content[i] = b
+				i++
+			}
+			size--
 		}
-		overlay[filename] = stripCR(content)
+		
+		overlay[filename] = content[:i]
 	}
 
 	return overlay, nil
