@@ -37,13 +37,13 @@ type Importer struct {
 // non-nil file system functions, they are used instead of the regular package
 // os functions. The file set is used to track position information of package
 // files; and imported packages are added to the packages map.
-func New(ctxt *build.Context, fset *token.FileSet, files map[string]*ast.File, info *types.Info) *Importer {
+func New(ctxt *build.Context, fset *token.FileSet, info *types.Info) *Importer {
 	return &Importer{
 		ctxt:     ctxt,
 		fset:     fset,
 		sizes:    types.SizesFor(ctxt.Compiler, ctxt.GOARCH), // uses go/types default if GOARCH not found
 		packages: make(map[string]*types.Package),
-		files:    files,
+		files:    make(map[string]*ast.File),
 		info:     info,
 	}
 }
@@ -179,14 +179,14 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 
 	var wg sync.WaitGroup
 	wg.Add(len(filenames))
-	var mutex sync.Mutex
+	var mutex sync.RWMutex
 	for i, filename := range filenames {
 		go func(i int, filepath string) {
 			defer wg.Done()
 
-			mutex.Lock()
+			mutex.RLock()
 			file, ok := p.files[filepath]
-			mutex.Unlock()
+			mutex.RUnlock()
 			if ok {
 				files[i], errors[i] = file, nil
 			} else {
@@ -196,7 +196,7 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 						errors[i] = fmt.Errorf("opening package file %s failed (%v)", filepath, err)
 						return
 					}
-					files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, parser.AllErrors)
+					files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, 0)
 					src.Close() // ignore Close error - parsing may have succeeded which is all we need
 				} else {
 					// Special-case when ctxt doesn't provide a custom OpenFile and use the
@@ -269,45 +269,34 @@ func (p *Importer) openFile(path string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }
 
-func (p *Importer) ParseDir(dir string, mode parser.Mode) (pkgs map[string]*ast.Package, first error) {
+func (p *Importer) ParseFile(fileName string) (*ast.File, error) {
+	astFiles, err := p.parseFiles("", []string{fileName})
+	if err != nil {
+		return nil, err
+	}
+	return astFiles[0], nil
+}
+
+func (p *Importer) ParseDir(dir string) ([]*ast.File, error) {
 	list, err := p.readDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	pkgs = make(map[string]*ast.Package)
-	for _, d := range list {
-		if strings.HasSuffix(d.Name(), ".go") {
-			filename := filepath.Join(dir, d.Name())
-
-			src, ok := p.files[filename]
-			if !ok {
-				buf, err := p.openFile(filename)
-				if err != nil {
-					buf = nil
-				}
-				src, err = parser.ParseFile(p.fset, filename, buf, mode)
-				if err == nil {
-					p.files[filename] = src
-				}
-			}
-
-			if err == nil {
-				name := src.Name.Name
-				pkg, found := pkgs[name]
-				if !found {
-					pkg = &ast.Package{
-						Name:  name,
-						Files: make(map[string]*ast.File),
-					}
-					pkgs[name] = pkg
-				}
-				pkg.Files[filename] = src
-			} else if first == nil {
-				first = err
-			}
+	fileNames := make([]string, 0, len(list))
+	for _, f := range list {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), ".go") {
+			fileNames = append(fileNames, f.Name())
 		}
 	}
 
-	return
+	return p.parseFiles(dir, fileNames)
+}
+
+func (p *Importer) PathEnclosingInterval(fileName string, start, end token.Pos) []ast.Node {
+	if astFile, ok := p.files[fileName]; ok {
+		nodes, _ := PathEnclosingInterval(astFile, start, end)
+		return nodes
+	}
+	return []ast.Node{}
 }

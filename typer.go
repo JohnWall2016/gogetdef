@@ -6,10 +6,8 @@ import (
 	"github.com/JohnWall2016/gogetdef/importer"
 	"go/ast"
 	"go/build"
-	"go/parser"
 	"go/token"
 	"go/types"
-	"golang.org/x/tools/go/ast/astutil"
 	"io"
 	"path/filepath"
 	"strconv"
@@ -24,7 +22,6 @@ type typeInfo struct {
 	importer *importer.Importer
 	ctxt     *build.Context
 	conf     *types.Config
-	files    map[string]*ast.File
 	errors   string
 }
 
@@ -38,11 +35,10 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 			Scopes:     make(map[ast.Node]*types.Scope),
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
-		fset:  token.NewFileSet(),
-		ctxt:  importer.OverlayContext(&build.Default, overlay),
-		files: make(map[string]*ast.File),
+		fset: token.NewFileSet(),
+		ctxt: importer.OverlayContext(&build.Default, overlay),
 	}
-	info.importer = importer.New(info.ctxt, info.fset, info.files, &info.Info)
+	info.importer = importer.New(info.ctxt, info.fset, &info.Info)
 	info.conf = &types.Config{
 		Importer:         info.importer,
 		IgnoreFuncBodies: false,
@@ -54,8 +50,7 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 	return info
 }
 
-func (ti *typeInfo) ident(id *ast.Ident) (decl, pos string, err error) {
-	obj := ti.ObjectOf(id)
+func (ti *typeInfo) ident(obj types.Object) (decl, pos string, err error) {
 	decl = obj.String()
 
 	if p := ti.fset.Position(obj.Pos()); p.IsValid() {
@@ -63,21 +58,19 @@ func (ti *typeInfo) ident(id *ast.Ident) (decl, pos string, err error) {
 	}
 
 	if file := ti.fset.File(obj.Pos()); file != nil {
-		if astfile, ok := ti.files[file.Name()]; ok {
-			nodes, _ := astutil.PathEnclosingInterval(astfile, obj.Pos(), obj.Pos())
-			for _, node := range nodes {
-				switch node.(type) {
-				case *ast.Ident:
-					// continue ascending AST (searching for parent node of the identifier))
-					continue
-				case *ast.FuncDecl, *ast.GenDecl, *ast.Field, *ast.TypeSpec, *ast.ValueSpec:
-					// found the parent node
-				default:
-					break
-				}
-				decl = formatNode(node, obj, ti.fset, false)
+		nodes := ti.importer.PathEnclosingInterval(file.Name(), obj.Pos(), obj.Pos())
+		for _, node := range nodes {
+			switch node.(type) {
+			case *ast.Ident:
+				// continue ascending AST (searching for parent node of the identifier))
+				continue
+			case *ast.FuncDecl, *ast.GenDecl, *ast.Field, *ast.TypeSpec, *ast.ValueSpec:
+				// found the parent node
+			default:
 				break
 			}
+			decl = formatNode(node, obj, ti.fset, false)
+			break
 		}
 	}
 	return
@@ -93,33 +86,31 @@ func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (decl, pos string, err erro
 	return "package " + bpkg.Name, bpkg.Dir, nil
 }
 
-func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, err error) {
-	pkgs, err := ti.importer.ParseDir(filepath.Dir(filename), parser.ParseComments|parser.AllErrors)
+func (ti *typeInfo) findDeclare(fileName string, offset int) (decl, pos string, err error) {
+	astFile, err := ti.importer.ParseFile(fileName)
+	if err != nil {
+		return
+	}
+	
+	pkgName := astFile.Name.Name
+	if pkgName == "" {
+		err = errors.New("can't get package name")
+		return
+	}
+
+	astFiles, err := ti.importer.ParseDir(filepath.Dir(fileName))
 	if err != nil {
 		return
 	}
 
-	var pkgName string
-	var astFile *ast.File
-	astFiles := make(map[string][]*ast.File)
-	for pname, pkg := range pkgs {
-		for fname, afile := range pkg.Files {
-			astFiles[pname] = append(astFiles[pname], afile)
-			if importer.SameFile(filename, fname) {
-				pkgName = pname
-				astFile = afile
-			}
-		}
-		if pkgName != "" {
-			break
+	chkFiles := []*ast.File{}
+	for _, afile := range astFiles {
+		if afile.Name.Name == pkgName {
+			chkFiles = append(chkFiles, afile)
 		}
 	}
 
-	if pkgName == "" {
-		return "", "", errors.New("can't get package name")
-	}
-
-	if strings.HasSuffix(filename, "_test.go") {
+	if strings.HasSuffix(fileName, "_test.go") {
 		rpkg := strings.TrimSuffix(pkgName, "_test")
 		ti.importer.IncludeTests = func(pkg string) bool {
 			if pkg == rpkg {
@@ -132,7 +123,7 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 	}
 
 	tpkg := types.NewPackage(pkgName, "")
-	cerr := types.NewChecker(ti.conf, ti.fset, tpkg, &ti.Info).Files(astFiles[pkgName])
+	cerr := types.NewChecker(ti.conf, ti.fset, tpkg, &ti.Info).Files(chkFiles)
 
 	tokFile := ti.fset.File(astFile.Pos())
 	if tokFile == nil {
@@ -142,15 +133,16 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 		return "", "", errors.New("illegal file offset")
 	}
 	p := tokFile.Pos(offset)
-	path, _ := astutil.PathEnclosingInterval(astFile, p, p)
+	path, _ := importer.PathEnclosingInterval(astFile, p, p)
 
 	for _, node := range path {
 		switch n := node.(type) {
 		case *ast.Ident:
-			if obj := ti.ObjectOf(n); obj == nil {
+			var obj types.Object
+			if obj = ti.ObjectOf(n); obj == nil {
 				continue
 			}
-			return ti.ident(n)
+			return ti.ident(obj)
 		case *ast.ImportSpec:
 			return ti.importSpec(n)
 		default:
@@ -164,7 +156,7 @@ func (ti *typeInfo) findDeclare(filename string, offset int) (decl, pos string, 
 	return "", "", cerr
 }
 
-func findDeclare(filename string, offset int, archive io.Reader) (decl, pos string, err error) {
+func findDeclare(fileName string, offset int, archive io.Reader) (decl, pos string, err error) {
 	var overlay map[string][]byte
 	if archive != nil {
 		overlay, err = importer.ParseOverlayArchive(archive)
@@ -174,5 +166,5 @@ func findDeclare(filename string, offset int, archive io.Reader) (decl, pos stri
 	}
 	ti := newTypeInfo(overlay)
 
-	return ti.findDeclare(filename, offset)
+	return ti.findDeclare(fileName, offset)
 }
