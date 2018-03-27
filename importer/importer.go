@@ -285,7 +285,7 @@ func (p *Importer) ParseDir(dir string) ([]*ast.File, error) {
 
 	fileNames := make([]string, 0, len(list))
 	for _, f := range list {
-		if !f.IsDir() && strings.HasSuffix(f.Name(), ".go") {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), ".go") && !strings.HasPrefix(f.Name(), ".") {
 			fileNames = append(fileNames, f.Name())
 		}
 	}
