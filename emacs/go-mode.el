@@ -410,6 +410,33 @@ You can install gogetdef with 'go get -u github.com/JohnWall2016/gogetdef'."
             (message "%s" (mapconcat #'identity dcl "\n")))))
     (file-error (message "Could not run gogetdef binary"))))
 
+(defun gogetdef-all (point)
+  "Use the gogetdef tool to find the definition for an identifier at POINT.
+
+You can install gogetdef with 'go get -u github.com/JohnWall2016/gogetdef'."
+  (if (not (buffer-file-name (go--coverage-origin-buffer)))
+      ;; TODO: gogetdef supports unsaved files, but not introducing
+      ;; new artifical files, so this limitation will stay for now.
+      (error "Cannot use gogetdef on a buffer without a file name"))
+  (let ((buff (go--coverage-origin-buffer))
+        (posn (if (eq system-type 'windows-nt)
+                  (format "%s:#%d" (file-truename buffer-file-name) (1- (position-bytes point)))
+                (format "%s:#%d" (shell-quote-argument (file-truename buffer-file-name)) (1- (position-bytes point)))))
+        (out (godoc--get-buffer "<at point>")))
+  (with-current-buffer (get-buffer-create "*go-getdef-input*")
+    (setq-local inhibit-eol-conversion t)
+    (setq buffer-read-only nil)
+    (erase-buffer)
+    (go--insert-modified-files buff)
+    (call-process-region (point-min) (point-max) "gogetdef" nil out nil
+                         "-modified"
+                         "-all"
+                         (format "-pos=%s" posn)))
+  (with-current-buffer out
+    (goto-char (point-min))
+    (godoc-mode)
+    (display-buffer (current-buffer) t))))
+
 (defun go--kill-new-message (url)
   "Make URL the latest kill and print a message."
   (kill-new url)

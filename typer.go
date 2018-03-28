@@ -6,6 +6,8 @@ import (
 	"github.com/JohnWall2016/gogetdef/importer"
 	"go/ast"
 	"go/build"
+	"go/doc"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"io"
@@ -21,6 +23,7 @@ type typeInfo struct {
 	fset     *token.FileSet
 	importer *importer.Importer
 	ctxt     *build.Context
+	mode     parser.Mode
 	conf     *types.Config
 	errors   string
 }
@@ -38,7 +41,10 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 		fset: token.NewFileSet(),
 		ctxt: importer.OverlayContext(&build.Default, overlay),
 	}
-	info.importer = importer.New(info.ctxt, info.fset, &info.Info)
+	if *showall {
+		info.mode |= parser.ParseComments
+	}
+	info.importer = importer.New(info.ctxt, info.fset, &info.Info, info.mode)
 	info.conf = &types.Config{
 		Importer:         info.importer,
 		IgnoreFuncBodies: false,
@@ -50,11 +56,12 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 	return info
 }
 
-func (ti *typeInfo) ident(obj types.Object) (decl, pos string, err error) {
-	decl = obj.String()
+func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
+	def = &definition{}
 
+	def.decl = obj.String()
 	if p := ti.fset.Position(obj.Pos()); p.IsValid() {
-		pos = p.String()
+		def.pos = p.String()
 	}
 
 	if file := ti.fset.File(obj.Pos()); file != nil {
@@ -69,29 +76,93 @@ func (ti *typeInfo) ident(obj types.Object) (decl, pos string, err error) {
 			default:
 				break
 			}
-			decl = formatNode(node, obj, ti.fset, false)
+			def.decl = formatNode(node, obj, ti.fset, false)
 			break
+		}
+		if *showall {
+			if obj.Pkg() != nil {
+				def.imprt = obj.Pkg().Path()
+				def.pkg = obj.Pkg().Name()
+			}
+			for _, node := range nodes {
+				//fmt.Printf("for %s: found %T\n%#v\n", id.Name, node, node)
+				switch n := node.(type) {
+				case *ast.Ident:
+					continue
+				case *ast.FuncDecl:
+					def.doc = n.Doc.Text()
+					return
+				case *ast.Field:
+					if n.Doc != nil {
+						def.doc = n.Doc.Text()
+					} else if n.Comment != nil {
+						def.doc = n.Comment.Text()
+					}
+					return
+				case *ast.TypeSpec:
+					if n.Doc != nil {
+						def.doc = n.Doc.Text()
+						return
+					}
+					if n.Comment != nil {
+						def.doc = n.Comment.Text()
+						return
+					}
+				case *ast.ValueSpec:
+					if n.Doc != nil {
+						def.doc = n.Doc.Text()
+						return
+					}
+					if n.Comment != nil {
+						def.doc = n.Comment.Text()
+						return
+					}
+				case *ast.GenDecl:
+					constValue := ""
+					if c, ok := obj.(*types.Const); ok {
+						constValue = c.Val().ExactString()
+					}
+					if def.doc == "" && n.Doc != nil {
+						def.doc = n.Doc.Text()
+					}
+					if constValue != "" {
+						def.doc += fmt.Sprintf("\nConstant Value: %s", constValue)
+					}
+					return
+				default:
+					return
+				}
+			}
 		}
 	}
 	return
 }
 
-func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (decl, pos string, err error) {
+func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (def *definition, err error) {
 	path, _ := strconv.Unquote(spec.Path.Value)
 	bpkg, err := build.Import(path, "", build.ImportComment)
 	if err != nil {
 		return
 	}
-
-	return "package " + bpkg.Name, bpkg.Dir, nil
+	def = &definition{decl: "package " + bpkg.Name, pos: bpkg.Dir}
+	if *showall {
+		astPkg, ok := ti.importer.GetCachedPackage(bpkg.Name)
+		if ok {
+			docPkg := doc.New(astPkg, path, 0)
+			def.doc = docPkg.Doc
+			def.pkg = docPkg.Name
+			def.imprt = path
+		}
+	}
+	return
 }
 
-func (ti *typeInfo) findDeclare(fileName string, offset int) (decl, pos string, err error) {
+func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition, err error) {
 	astFile, err := ti.importer.ParseFile(fileName)
 	if err != nil {
 		return
 	}
-	
+
 	pkgName := astFile.Name.Name
 	if pkgName == "" {
 		err = errors.New("can't get package name")
@@ -127,10 +198,10 @@ func (ti *typeInfo) findDeclare(fileName string, offset int) (decl, pos string, 
 
 	tokFile := ti.fset.File(astFile.Pos())
 	if tokFile == nil {
-		return "", "", errors.New("can't get token file")
+		return nil, errors.New("can't get token file")
 	}
 	if offset > tokFile.Size() {
-		return "", "", errors.New("illegal file offset")
+		return nil, errors.New("illegal file offset")
 	}
 	p := tokFile.Pos(offset)
 	path, _ := importer.PathEnclosingInterval(astFile, p, p)
@@ -153,10 +224,10 @@ func (ti *typeInfo) findDeclare(fileName string, offset int) (decl, pos string, 
 			break
 		}
 	}
-	return "", "", cerr
+	return nil, cerr
 }
 
-func findDeclare(fileName string, offset int, archive io.Reader) (decl, pos string, err error) {
+func findDefinition(fileName string, offset int, archive io.Reader) (def *definition, err error) {
 	var overlay map[string][]byte
 	if archive != nil {
 		overlay, err = importer.ParseOverlayArchive(archive)
@@ -166,5 +237,5 @@ func findDeclare(fileName string, offset int, archive io.Reader) (decl, pos stri
 	}
 	ti := newTypeInfo(overlay)
 
-	return ti.findDeclare(fileName, offset)
+	return ti.findDefinition(fileName, offset)
 }

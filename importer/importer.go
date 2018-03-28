@@ -25,10 +25,52 @@ type Importer struct {
 	ctxt         *build.Context
 	fset         *token.FileSet
 	sizes        types.Sizes
-	packages     map[string]*types.Package
-	files        map[string]*ast.File
+	typPkgs      map[string]*types.Package
+	astPkgs      *astPkgCache
 	info         *types.Info
 	IncludeTests func(pkg string) bool
+	mode         parser.Mode
+}
+
+type astPkgCache struct {
+	sync.RWMutex
+	packages map[string]*ast.Package
+}
+
+func (c *astPkgCache) cachedFile(name string) (*ast.File, bool) {
+	c.RLock()
+	defer c.RUnlock()
+	for _, pkg := range c.packages {
+		f, cached := pkg.Files[name]
+		if cached {
+			return f, cached
+		}
+	}
+	return nil, false
+}
+
+func (c *astPkgCache) cacheFile(name string, file *ast.File) {
+	c.Lock()
+	defer c.Unlock()
+	pkgName := file.Name.Name
+	if pkg, ok := c.packages[pkgName]; ok {
+		pkg.Files[name] = file
+	} else {
+		pkg = &ast.Package{
+			Name: pkgName,
+			Files: map[string]*ast.File{
+				name: file,
+			},
+		}
+		c.packages[pkgName] = pkg
+	}
+}
+
+func (c *astPkgCache) cachedPackage(pkgName string) (pkg *ast.Package, ok bool) {
+	c.RLock()
+	defer c.RUnlock()
+	pkg, ok = c.packages[pkgName]
+	return
 }
 
 // NewImporter returns a new Importer for the given context, file set, and map
@@ -37,14 +79,15 @@ type Importer struct {
 // non-nil file system functions, they are used instead of the regular package
 // os functions. The file set is used to track position information of package
 // files; and imported packages are added to the packages map.
-func New(ctxt *build.Context, fset *token.FileSet, info *types.Info) *Importer {
+func New(ctxt *build.Context, fset *token.FileSet, info *types.Info, mode parser.Mode) *Importer {
 	return &Importer{
-		ctxt:     ctxt,
-		fset:     fset,
-		sizes:    types.SizesFor(ctxt.Compiler, ctxt.GOARCH), // uses go/types default if GOARCH not found
-		packages: make(map[string]*types.Package),
-		files:    make(map[string]*ast.File),
-		info:     info,
+		ctxt:    ctxt,
+		fset:    fset,
+		sizes:   types.SizesFor(ctxt.Compiler, ctxt.GOARCH), // uses go/types default if GOARCH not found
+		typPkgs: make(map[string]*types.Package),
+		astPkgs: &astPkgCache{packages: make(map[string]*ast.Package)},
+		info:    info,
+		mode:    mode,
 	}
 }
 
@@ -94,7 +137,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 	}
 
 	// no need to re-import if the package was imported completely before
-	pkg := p.packages[bp.ImportPath]
+	pkg := p.typPkgs[bp.ImportPath]
 	if pkg != nil {
 		if pkg == &importing {
 			return nil, fmt.Errorf("import cycle through package %q", bp.ImportPath)
@@ -109,14 +152,14 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 		return pkg, nil
 	}
 
-	p.packages[bp.ImportPath] = &importing
+	p.typPkgs[bp.ImportPath] = &importing
 	defer func() {
 		// clean up in case of error
 		// TODO(gri) Eventually we may want to leave a (possibly empty)
 		// package in the map in all cases (and use that package to
 		// identify cycles). See also issue 16088.
-		if p.packages[bp.ImportPath] == &importing {
-			p.packages[bp.ImportPath] = nil
+		if p.typPkgs[bp.ImportPath] == &importing {
+			p.typPkgs[bp.ImportPath] = nil
 		}
 	}()
 
@@ -167,7 +210,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 		panic("package is not safe yet no error was returned")
 	}
 
-	p.packages[bp.ImportPath] = pkg
+	p.typPkgs[bp.ImportPath] = pkg
 	return pkg, nil
 }
 
@@ -179,15 +222,11 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 
 	var wg sync.WaitGroup
 	wg.Add(len(filenames))
-	var mutex sync.RWMutex
 	for i, filename := range filenames {
 		go func(i int, filepath string) {
 			defer wg.Done()
-
-			mutex.RLock()
-			file, ok := p.files[filepath]
-			mutex.RUnlock()
-			if ok {
+			file, cached := p.astPkgs.cachedFile(filepath)
+			if cached {
 				files[i], errors[i] = file, nil
 			} else {
 				if open != nil {
@@ -196,7 +235,7 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 						errors[i] = fmt.Errorf("opening package file %s failed (%v)", filepath, err)
 						return
 					}
-					files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, 0)
+					files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, p.mode)
 					src.Close() // ignore Close error - parsing may have succeeded which is all we need
 				} else {
 					// Special-case when ctxt doesn't provide a custom OpenFile and use the
@@ -204,12 +243,10 @@ func (p *Importer) parseFiles(dir string, filenames []string) ([]*ast.File, erro
 					// bit faster than opening the file and providing an io.ReaderCloser in
 					// both cases.
 					// TODO(gri) investigate performance difference (issue #19281)
-					files[i], errors[i] = parser.ParseFile(p.fset, filepath, nil, 0)
+					files[i], errors[i] = parser.ParseFile(p.fset, filepath, nil, p.mode)
 				}
 				if errors[i] == nil {
-					mutex.Lock()
-					p.files[filepath] = files[i]
-					mutex.Unlock()
+					p.astPkgs.cacheFile(filepath, files[i])
 				}
 			}
 		}(i, p.joinPath(dir, filename))
@@ -282,21 +319,23 @@ func (p *Importer) ParseDir(dir string) ([]*ast.File, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	fileNames := make([]string, 0, len(list))
 	for _, f := range list {
 		if !f.IsDir() && strings.HasSuffix(f.Name(), ".go") && !strings.HasPrefix(f.Name(), ".") {
 			fileNames = append(fileNames, f.Name())
 		}
 	}
-
 	return p.parseFiles(dir, fileNames)
 }
 
 func (p *Importer) PathEnclosingInterval(fileName string, start, end token.Pos) []ast.Node {
-	if astFile, ok := p.files[fileName]; ok {
-		nodes, _ := PathEnclosingInterval(astFile, start, end)
+	if f, ok := p.astPkgs.cachedFile(fileName); ok {
+		nodes, _ := PathEnclosingInterval(f, start, end)
 		return nodes
 	}
 	return []ast.Node{}
+}
+
+func (p *Importer) GetCachedPackage(pkgName string) (*ast.Package, bool) {
+	return p.astPkgs.cachedPackage(pkgName)
 }

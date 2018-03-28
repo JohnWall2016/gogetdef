@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	pos      = flag.String("pos", "", "Filename and byte offset of item to document, e.g. foo.go:#123")
+	pos      = flag.String("pos", "", "filename and byte offset of item to find, e.g. foo.go:#123")
 	modified = flag.Bool("modified", false, "read an archive of modified files from standard input")
+	showall  = flag.Bool("all", false, "show all the information of the item")
 )
 
 const modifiedUsage = `
@@ -42,15 +43,19 @@ func main() {
 		archive = os.Stdin
 	}
 
-	decl, pos, err := findDeclare(filename, int(offset), archive)
+	def, err := findDefinition(filename, int(offset), archive)
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	fmt.Println("gogetdef-return")
-	fmt.Println(pos)
-	fmt.Print(decl)
+	if *showall {
+		fmt.Print(def)
+	} else {
+		fmt.Println("gogetdef-return")
+		fmt.Println(def.pos)
+		fmt.Print(def.decl)
+	}
 }
 
 func parsePos(p string) (filename string, offset int64, err error) {
