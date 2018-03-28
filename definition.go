@@ -7,8 +7,8 @@ import (
 )
 
 type definition struct {
-	decl, pos       string
-	imprt, pkg, doc string
+	decl, pos  string
+	imprt, doc string
 }
 
 func (d *definition) String() string {

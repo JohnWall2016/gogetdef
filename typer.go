@@ -82,7 +82,6 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 		if *showall {
 			if obj.Pkg() != nil {
 				def.imprt = obj.Pkg().Path()
-				def.pkg = obj.Pkg().Name()
 			}
 			for _, node := range nodes {
 				//fmt.Printf("for %s: found %T\n%#v\n", id.Name, node, node)
@@ -134,6 +133,11 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 				}
 			}
 		}
+	} else if obj.Pkg() == nil {
+		d, _ := ti.findBuiltinDef(obj.Name())
+		if d != nil {
+			return d, nil
+		}
 	}
 	return
 }
@@ -150,7 +154,6 @@ func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (def *definition, err error
 		if ok {
 			docPkg := doc.New(astPkg, path, 0)
 			def.doc = docPkg.Doc
-			def.pkg = docPkg.Name
 			def.imprt = path
 		}
 	}

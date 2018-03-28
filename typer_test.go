@@ -1,12 +1,12 @@
 package main
 
 import (
-	"path/filepath"
-	"testing"
-	"runtime"
 	"bytes"
-	"io/ioutil"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"runtime"
+	"testing"
 )
 
 func getSrcCodeDir() string {
@@ -21,41 +21,51 @@ func getTestDataDir() string {
 	return filepath.Join(getSrcCodeDir(), "testdata")
 }
 
+func TestBuiltinType(t *testing.T) {
+	testFile := filepath.Join(getTestDataDir(), "file3.go")
+	def, err := findDefinition(testFile, 77, nil)
+	if err == nil {
+		t.Logf("%s, %s", def.decl, def.pos)
+	} else {
+		t.Logf("%s", err.Error())
+	}
+}
+
 func TestFindDeclare(t *testing.T) {
 	testFile := filepath.Join(getTestDataDir(), "file2.go")
-	decl, pos, err := findDeclare(testFile, 169, nil)//169)
+	def, err := findDefinition(testFile, 169, nil)
 	if err == nil {
-		t.Logf("%s, %s", decl, pos)
+		t.Logf("%s, %s", def.decl, def.pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = findDeclare(testFile, 177, nil)//177)
+	def, err = findDefinition(testFile, 177, nil)
 	if err == nil {
-		t.Logf("%s, %s", decl, pos)
+		t.Logf("%s, %s", def.decl, def.pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = findDeclare(testFile, 146, nil)//146)
+	def, err = findDefinition(testFile, 146, nil)
 	if err == nil {
-		t.Logf("%s, %s", decl, pos)
+		t.Logf("%s, %s", def.decl, def.pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = findDeclare(testFile, 142, nil)//146)
+	def, err = findDefinition(testFile, 142, nil)
 	if err == nil {
-		t.Logf("%s, %s", decl, pos)
+		t.Logf("%s, %s", def.decl, def.pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = findDeclare(testFile, 29, nil)
+	def, err = findDefinition(testFile, 29, nil)
 	if err == nil {
-		t.Logf("%s, %s", decl, pos)
+		t.Logf("%s, %s", def.decl, def.pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
-	decl, pos, err = findDeclare(testFile, 203, nil)
+	def, err = findDefinition(testFile, 203, nil)
 	if err == nil {
-		t.Logf("%s, %s", decl, pos)
+		t.Logf("%s, %s", def.decl, def.pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
@@ -71,9 +81,9 @@ func TestOverlayArchive(t *testing.T) {
 	buf.Write([]byte(s))
 	buf.Write(buf2)
 
-	decl, pos, err := findDeclare(testFile, 169, &buf)
+	def, err := findDefinition(testFile, 169, &buf)
 	if err == nil {
-		t.Logf("%s, %s", decl, pos)
+		t.Logf("%s, %s", def.decl, def.pos)
 	} else {
 		t.Logf("%s", err.Error())
 	}
