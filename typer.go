@@ -12,6 +12,7 @@ import (
 	"go/types"
 	"io"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,7 +26,8 @@ type typeInfo struct {
 	ctxt     *build.Context
 	mode     parser.Mode
 	conf     *types.Config
-	errors   string
+	errors   []error
+	maxerrs  int
 }
 
 func newTypeInfo(overlay map[string][]byte) *typeInfo {
@@ -38,8 +40,10 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 			Scopes:     make(map[ast.Node]*types.Scope),
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
-		fset: token.NewFileSet(),
-		ctxt: importer.OverlayContext(&build.Default, overlay),
+		fset:    token.NewFileSet(),
+		ctxt:    importer.OverlayContext(&build.Default, overlay),
+		mode:    0,
+		maxerrs: 10,
 	}
 	if *showall {
 		info.mode |= parser.ParseComments
@@ -50,7 +54,9 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 		IgnoreFuncBodies: false,
 		FakeImportC:      true,
 		Error: func(err error) {
-			info.errors += err.Error() + "\n"
+			if len(info.errors) <= info.maxerrs+1 {
+				info.errors = append(info.errors, err)
+			}
 		},
 	}
 	return info
@@ -220,12 +226,23 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 		case *ast.ImportSpec:
 			return ti.importSpec(n)
 		default:
-			if cerr == nil {
-				//cerr = errors.New(fmt.Sprintf("can't found the node: %#v", node))
-				cerr = errors.New("can't find definition")
-			}
 			break
 		}
+	}
+	if cerr != nil && *showall {
+		errmsg := []string{}
+		for _, e := range ti.errors {
+			errmsg = append(errmsg, e.Error())
+		}
+		sort.Strings(errmsg)
+		if len(errmsg) > ti.maxerrs {
+			errmsg[ti.maxerrs+1] = "..."
+		}
+		cerr = errors.New(strings.Join(errmsg, "\n"))
+	}
+	if cerr == nil {
+		//cerr = errors.New(fmt.Sprintf("can't found the node: %#v", node))
+		cerr = errors.New("can't find definition")
 	}
 	return nil, cerr
 }
