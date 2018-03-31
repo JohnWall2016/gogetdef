@@ -82,7 +82,7 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 			default:
 				break
 			}
-			def.decl = formatNode(node, obj, ti.fset, false)
+			def.decl = formatNode(node, obj, ti.fset, *showall)
 			break
 		}
 		if *showall {
