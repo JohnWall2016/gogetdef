@@ -242,10 +242,6 @@ func (check *Checker) checkFiles(files []*ast.File) (err error) {
 
 	check.initOrder()
 
-	if !check.conf.DisableUnusedImportCheck {
-		check.unusedImports()
-	}
-
 	// perform delayed checks
 	for _, f := range check.delayed {
 		f()

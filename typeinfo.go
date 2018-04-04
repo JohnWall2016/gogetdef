@@ -24,7 +24,6 @@ type typeInfo struct {
 	fset     *token.FileSet
 	importer *imports.Importer
 	ctxt     *build.Context
-	conf     *types.Config
 	errors   []error
 	maxerrs  int
 }
@@ -48,16 +47,7 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 		mode = parser.ParseComments
 	}
 	info.importer = imports.NewImporter(info.ctxt, info.fset, &info.Info, mode)
-	info.conf = &types.Config{
-		Importer:         info.importer,
-		IgnoreFuncBodies: false,
-		FakeImportC:      true,
-		Error: func(err error) {
-			if len(info.errors) <= info.maxerrs+1 {
-				info.errors = append(info.errors, err)
-			}
-		},
-	}
+
 	return info
 }
 
@@ -177,14 +167,23 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 		return
 	}
 
+	tokFile := ti.fset.File(astFile.Pos())
+	if tokFile == nil {
+		return nil, errors.New("can't get token file")
+	}
+	if offset > tokFile.Size() {
+		return nil, errors.New("illegal file offset")
+	}
+	pos := tokFile.Pos(offset)
+
 	astFiles, err := ti.importer.ParseDir(filepath.Dir(fileName))
 	if err != nil {
 		return
 	}
 
-	chkFiles := []*ast.File{}
+	chkFiles := []*ast.File{astFile}
 	for _, afile := range astFiles {
-		if afile.Name.Name == pkgName {
+		if afile.Name.Name == pkgName && afile != astFile {
 			chkFiles = append(chkFiles, afile)
 		}
 	}
@@ -202,17 +201,25 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 	}
 
 	tpkg := types.NewPackage(pkgName, "")
-	cerr := types.NewChecker(ti.conf, ti.fset, tpkg, &ti.Info).Files(chkFiles)
 
-	tokFile := ti.fset.File(astFile.Pos())
-	if tokFile == nil {
-		return nil, errors.New("can't get token file")
+	conf := &types.Config{
+		Importer: ti.importer,
+		IgnoreFuncBodies: func(lbrace, rbrace token.Pos) bool {
+			if lbrace <= pos && pos <= rbrace {
+				return false
+			}
+			return true
+		},
+		FakeImportC: true,
+		Error: func(err error) {
+			if len(ti.errors) <= ti.maxerrs+1 {
+				ti.errors = append(ti.errors, err)
+			}
+		},
 	}
-	if offset > tokFile.Size() {
-		return nil, errors.New("illegal file offset")
-	}
-	p := tokFile.Pos(offset)
-	path, _ := imports.PathEnclosingInterval(astFile, p, p)
+	cerr := types.NewChecker(conf, ti.fset, tpkg, &ti.Info).Files(chkFiles)
+
+	path, _ := imports.PathEnclosingInterval(astFile, pos, pos)
 
 	for _, node := range path {
 		switch n := node.(type) {

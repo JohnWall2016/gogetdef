@@ -183,7 +183,9 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 	// type-check package files
 	var firstHardErr error
 	conf := types.Config{
-		IgnoreFuncBodies: true,
+		IgnoreFuncBodies: func(lbrace, rbrace token.Pos) bool {
+			return true
+		},
 		FakeImportC:      true,
 		// continue type-checking after the first error
 		Error: func(err error) {
@@ -325,7 +327,7 @@ func (p *Importer) ParseDir(dir string) ([]*ast.File, error) {
 			fileNames = append(fileNames, f.Name())
 		}
 	}
-	return p.parseFiles(dir, fileNames, p.mode)
+	return p.parseFiles(dir, fileNames, p.mode|parser.IgnoreFuncBodies)
 }
 
 func (p *Importer) PathEnclosingInterval(fileName string, start, end token.Pos) []ast.Node {

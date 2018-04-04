@@ -94,7 +94,7 @@ type ImporterFrom interface {
 type Config struct {
 	// If IgnoreFuncBodies is set, function bodies are not
 	// type-checked.
-	IgnoreFuncBodies bool
+	IgnoreFuncBodies func(lbrace, rbrace token.Pos) bool
 
 	// If FakeImportC is set, `import "C"` (for packages requiring Cgo)
 	// declares an empty "C" package and errors are omitted for qualified
@@ -125,10 +125,6 @@ type Config struct {
 	// If Sizes != nil, it provides the sizing functions for package unsafe.
 	// Otherwise SizesFor("gc", "amd64") is used instead.
 	Sizes Sizes
-
-	// If DisableUnusedImportCheck is set, packages are not checked
-	// for unused imports.
-	DisableUnusedImportCheck bool
 }
 
 // Info holds result type information for a type-checked package.

@@ -483,44 +483,6 @@ func (check *Checker) functionBodies() {
 	}
 }
 
-// unusedImports checks for unused imports.
-func (check *Checker) unusedImports() {
-	// if function bodies are not checked, packages' uses are likely missing - don't check
-	if check.conf.IgnoreFuncBodies {
-		return
-	}
-
-	// spec: "It is illegal (...) to directly import a package without referring to
-	// any of its exported identifiers. To import a package solely for its side-effects
-	// (initialization), use the blank identifier as explicit package name."
-
-	// check use of regular imported packages
-	for _, scope := range check.pkg.scope.children /* file scopes */ {
-		for _, obj := range scope.elems {
-			if obj, ok := obj.(*PkgName); ok {
-				// Unused "blank imports" are automatically ignored
-				// since _ identifiers are not entered into scopes.
-				if !obj.used {
-					path := obj.imported.path
-					base := pkgName(path)
-					if obj.name == base {
-						check.softErrorf(obj.pos, "%q imported but not used", path)
-					} else {
-						check.softErrorf(obj.pos, "%q imported but not used as %s", path, obj.name)
-					}
-				}
-			}
-		}
-	}
-
-	// check use of dot-imported packages
-	for _, unusedDotImports := range check.unusedDotImports {
-		for pkg, pos := range unusedDotImports {
-			check.softErrorf(pos, "%q imported but not used", pkg.path)
-		}
-	}
-}
-
 // pkgName returns the package name (last element) of an import path.
 func pkgName(path string) string {
 	if i := strings.LastIndex(path, "/"); i >= 0 {
