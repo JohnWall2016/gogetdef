@@ -3,13 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/JohnWall2016/gogetdef/importer"
+	"github.com/JohnWall2016/gogetdef/imports"
+	"github.com/JohnWall2016/gogetdef/types"
 	"go/ast"
 	"go/build"
 	"go/doc"
 	"go/parser"
 	"go/token"
-	"go/types"
 	"io"
 	"path/filepath"
 	"sort"
@@ -22,7 +22,7 @@ var _ = fmt.Printf
 type typeInfo struct {
 	types.Info
 	fset     *token.FileSet
-	importer *importer.Importer
+	importer *imports.Importer
 	ctxt     *build.Context
 	mode     parser.Mode
 	conf     *types.Config
@@ -41,14 +41,14 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
 		fset:    token.NewFileSet(),
-		ctxt:    importer.OverlayContext(&build.Default, overlay),
+		ctxt:    imports.OverlayContext(&build.Default, overlay),
 		mode:    0,
 		maxerrs: 10,
 	}
 	if *showall {
 		info.mode |= parser.ParseComments
 	}
-	info.importer = importer.New(info.ctxt, info.fset, &info.Info, info.mode)
+	info.importer = imports.NewImporter(info.ctxt, info.fset, &info.Info, info.mode)
 	info.conf = &types.Config{
 		Importer:         info.importer,
 		IgnoreFuncBodies: false,
@@ -213,7 +213,7 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 		return nil, errors.New("illegal file offset")
 	}
 	p := tokFile.Pos(offset)
-	path, _ := importer.PathEnclosingInterval(astFile, p, p)
+	path, _ := imports.PathEnclosingInterval(astFile, p, p)
 
 	for _, node := range path {
 		switch n := node.(type) {
@@ -250,7 +250,7 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 func findDefinition(fileName string, offset int, archive io.Reader) (def *definition, err error) {
 	var overlay map[string][]byte
 	if archive != nil {
-		overlay, err = importer.ParseOverlayArchive(archive)
+		overlay, err = imports.ParseOverlayArchive(archive)
 		if err != nil {
 			return
 		}

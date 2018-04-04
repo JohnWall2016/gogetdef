@@ -4,15 +4,15 @@
 
 // Package srcimporter implements importing directly
 // from source files rather than installed packages.
-package importer
+package imports
 
 import (
 	"fmt"
+	"github.com/JohnWall2016/gogetdef/types"
 	"go/ast"
 	"go/build"
 	"go/parser"
 	"go/token"
-	"go/types"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -79,7 +79,7 @@ func (c *astPkgCache) cachedPackage(pkgName string) (pkg *ast.Package, ok bool) 
 // non-nil file system functions, they are used instead of the regular package
 // os functions. The file set is used to track position information of package
 // files; and imported packages are added to the packages map.
-func New(ctxt *build.Context, fset *token.FileSet, info *types.Info, mode parser.Mode) *Importer {
+func NewImporter(ctxt *build.Context, fset *token.FileSet, info *types.Info, mode parser.Mode) *Importer {
 	return &Importer{
 		ctxt:    ctxt,
 		fset:    fset,

@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/JohnWall2016/gogetdef/types"
 	"go/ast"
 	"go/printer"
 	"go/token"
-	"go/types"
 	"unicode"
 	"unicode/utf8"
 )
