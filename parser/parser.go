@@ -1070,19 +1070,39 @@ func (p *parser) parseStmtList() (list []ast.Stmt) {
 	return
 }
 
-func (p *parser) parseBody(scope *ast.Scope) *ast.BlockStmt {
+func (p *parser) parseBody(scope *ast.Scope, force bool) *ast.BlockStmt {
 	if p.trace {
 		defer un(trace(p, "Body"))
 	}
 
+	var (
+		rbrace token.Pos
+		list   []ast.Stmt
+	)
 	lbrace := p.expect(token.LBRACE)
-	p.topScope = scope // open function scope
-	p.openLabelScope()
-	list := p.parseStmtList()
-	p.closeLabelScope()
-	p.closeScope()
-	rbrace := p.expect(token.RBRACE)
-
+	if !force && p.mode&IgnoreFuncBodies != 0 {
+		nest := 1
+		for p.tok != token.EOF {
+			switch p.tok {
+			case token.LBRACE:
+				nest++
+			case token.RBRACE:
+				nest--
+			}
+			if nest == 0 {
+				rbrace = p.expect(token.RBRACE)
+				break
+			}
+			p.next()
+		}
+	} else {
+		p.topScope = scope // open function scope
+		p.openLabelScope()
+		list = p.parseStmtList()
+		p.closeLabelScope()
+		p.closeScope()
+		rbrace = p.expect(token.RBRACE)
+	}
 	return &ast.BlockStmt{Lbrace: lbrace, List: list, Rbrace: rbrace}
 }
 
@@ -1115,7 +1135,7 @@ func (p *parser) parseFuncTypeOrLit() ast.Expr {
 	}
 
 	p.exprLev++
-	body := p.parseBody(scope)
+	body := p.parseBody(scope, true)
 	p.exprLev--
 
 	return &ast.FuncLit{Type: typ, Body: body}
@@ -2389,7 +2409,7 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 
 	var body *ast.BlockStmt
 	if p.tok == token.LBRACE {
-		body = p.parseBody(scope)
+		body = p.parseBody(scope, false)
 	}
 	p.expectSemi()
 

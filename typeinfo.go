@@ -24,7 +24,6 @@ type typeInfo struct {
 	fset     *token.FileSet
 	importer *imports.Importer
 	ctxt     *build.Context
-	mode     parser.Mode
 	conf     *types.Config
 	errors   []error
 	maxerrs  int
@@ -42,13 +41,13 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 		},
 		fset:    token.NewFileSet(),
 		ctxt:    imports.OverlayContext(&build.Default, overlay),
-		mode:    0,
 		maxerrs: 10,
 	}
+	var mode parser.Mode
 	if *showall {
-		info.mode |= parser.ParseComments
+		mode = parser.ParseComments
 	}
-	info.importer = imports.NewImporter(info.ctxt, info.fset, &info.Info, info.mode)
+	info.importer = imports.NewImporter(info.ctxt, info.fset, &info.Info, mode)
 	info.conf = &types.Config{
 		Importer:         info.importer,
 		IgnoreFuncBodies: false,

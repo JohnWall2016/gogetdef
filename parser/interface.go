@@ -56,6 +56,7 @@ const (
 	PackageClauseOnly Mode             = 1 << iota // stop parsing after package clause
 	ImportsOnly                                    // stop parsing after import declarations
 	ParseComments                                  // parse comments and add them to AST
+	IgnoreFuncBodies                               // ignore to parse function bodies
 	Trace                                          // print a trace of parsed productions
 	DeclarationErrors                              // report declaration errors
 	SpuriousErrors                                 // same as AllErrors, for backward-compatibility
