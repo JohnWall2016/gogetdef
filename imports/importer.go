@@ -8,10 +8,10 @@ package imports
 
 import (
 	"fmt"
+	"github.com/JohnWall2016/gogetdef/parser"
 	"github.com/JohnWall2016/gogetdef/types"
 	"go/ast"
 	"go/build"
-	"go/parser"
 	"go/token"
 	"io/ioutil"
 	"os"

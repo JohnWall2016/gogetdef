@@ -6,7 +6,7 @@ package types
 
 import (
 	"fmt"
-	"go/parser"
+	"github.com/JohnWall2016/gogetdef/parser"
 	"go/token"
 )
 

@@ -79,10 +79,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/JohnWall2016/gogetdef/parser"
 	"go/ast"
 	"go/build"
 	"go/importer"
-	"go/parser"
 	"go/scanner"
 	"go/token"
 	"go/types"
