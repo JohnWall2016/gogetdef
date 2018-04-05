@@ -92,9 +92,10 @@ type ImporterFrom interface {
 // A Config specifies the configuration for type checking.
 // The zero value for Config is a ready-to-use default configuration.
 type Config struct {
-	// If IgnoreFuncBodies is set, function bodies are not
-	// type-checked.
-	IgnoreFuncBodies func(lbrace, rbrace token.Pos) bool
+	// If ParseFuncBodies is set, whether function bodies are
+	// type-checked or not is determined by the function.
+	// If ParseFuncBodies is nil, we will not type-check them.
+	ParseFuncBodies func(lbrace, rbrace token.Pos) bool
 
 	// If FakeImportC is set, `import "C"` (for packages requiring Cgo)
 	// declares an empty "C" package and errors are omitted for qualified

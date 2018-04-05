@@ -71,7 +71,7 @@ type parser struct {
 	labelScope  *ast.Scope     // label scope for current function
 	targetStack [][]*ast.Ident // stack of unresolved labels
 
-	parseFuncBodies InFuncBodies
+	parseFuncBodies InFuncBodies // whether or not to parse the function bodies
 }
 
 func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mode) {
