@@ -129,9 +129,12 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 			}
 		}
 	} else if obj.Pkg() == nil {
-		d, _ := ti.findBuiltinDef(obj.Name())
-		if d != nil {
-			return d, nil
+		bt, err := ti.importer.Import("builtin")
+		if err == nil {
+			obj := bt.Scope().Lookup(obj.Name())
+			if obj != nil {
+				return ti.ident(obj)
+			}
 		}
 	}
 	return
@@ -206,8 +209,6 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 		ti.importer.IncludeTests = nil
 	}
 
-	tpkg := types.NewPackage(pkgName, "")
-
 	conf := &types.Config{
 		Importer: ti.importer,
 		CheckFuncBodies: func(lbrace, rbrace token.Pos) bool {
@@ -223,6 +224,7 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 			}
 		},
 	}
+	tpkg := types.NewPackage(pkgName, "")
 	cerr := types.NewChecker(conf, ti.fset, tpkg, &ti.Info).Files(chkFiles)
 
 	path, _ := imports.PathEnclosingInterval(astFile, pos, pos)

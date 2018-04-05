@@ -11,7 +11,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/token"
-	"sort"
+	//"sort"
 )
 
 func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body *ast.BlockStmt) {
@@ -54,31 +54,31 @@ func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body
 	// declare a variable inside a function body if the variable is never used."
 	// (One could check each scope after use, but that distributes this check
 	// over several places because CloseScope is not always called explicitly.)
-	check.usage(sig.scope)
+	//check.usage(sig.scope)
 }
 
-func (check *Checker) usage(scope *Scope) {
-	var unused []*Var
-	for _, elem := range scope.elems {
-		if v, _ := elem.(*Var); v != nil && !v.used {
-			unused = append(unused, v)
-		}
-	}
-	sort.Slice(unused, func(i, j int) bool {
-		return unused[i].pos < unused[j].pos
-	})
-	for _, v := range unused {
-		check.softErrorf(v.pos, "%s declared but not used", v.name)
-	}
-
-	for _, scope := range scope.children {
-		// Don't go inside closure scopes a second time;
-		// they are handled explicitly by funcBody.
-		if !scope.isFunc {
-			check.usage(scope)
-		}
-	}
-}
+//func (check *Checker) usage(scope *Scope) {
+//	var unused []*Var
+//	for _, elem := range scope.elems {
+//		if v, _ := elem.(*Var); v != nil && !v.used {
+//			unused = append(unused, v)
+//		}
+//	}
+//	sort.Slice(unused, func(i, j int) bool {
+//		return unused[i].pos < unused[j].pos
+//	})
+//	for _, v := range unused {
+//		check.softErrorf(v.pos, "%s declared but not used", v.name)
+//	}
+//
+//	for _, scope := range scope.children {
+//		// Don't go inside closure scopes a second time;
+//		// they are handled explicitly by funcBody.
+//		if !scope.isFunc {
+//			check.usage(scope)
+//		}
+//	}
+//}
 
 // stmtContext is a bitset describing which
 // control-flow statements are permissible,

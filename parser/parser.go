@@ -28,6 +28,17 @@ import (
 
 type InFuncBodies func(lbrace, rbrace int) bool
 
+type state struct {
+	nextToken
+	scanState scanner.State
+}
+
+type nextToken struct {
+	pos token.Pos   // token position
+	tok token.Token // one token look-ahead
+	lit string      // token literal
+}
+
 // The parser structure holds the parser's internal state.
 type parser struct {
 	file    *token.File
@@ -45,10 +56,8 @@ type parser struct {
 	lineComment *ast.CommentGroup // last line comment
 
 	// Next token
-	pos token.Pos   // token position
-	tok token.Token // one token look-ahead
-	lit string      // token literal
-
+	nextToken
+	
 	// Error recovery
 	// (used to limit the number of calls to syncXXX functions
 	// w/o making scanning progress - avoids potential endless
@@ -261,12 +270,16 @@ func (p *parser) next0() {
 	p.pos, p.tok, p.lit = p.scanner.Scan()
 }
 
-func (p *parser) save() scanner.State {
-	return p.scanner.Save()
+func (p *parser) save() state {
+	return state{
+		nextToken: p.nextToken,
+		scanState: p.scanner.Save(),
+	}
 }
 
-func (p *parser) restore(state scanner.State) {
-	p.scanner.Restore(state)
+func (p *parser) restore(state state) {
+	p.nextToken = state.nextToken
+	p.scanner.Restore(state.scanState)
 }
 
 // Consume a comment and return it and the line on which it ends.
@@ -1091,8 +1104,8 @@ func (p *parser) parseBody(scope *ast.Scope) *ast.BlockStmt {
 		rbrace token.Pos
 		list   []ast.Stmt
 	)
-	st := p.save()
 	lbrace := p.expect(token.LBRACE)
+	st := p.save()
 	nest := 1
 	for p.tok != token.EOF {
 		switch p.tok {
@@ -2393,7 +2406,7 @@ func (p *parser) parseGenDecl(keyword token.Token, f parseSpecFunction) *ast.Gen
 		rparen = p.expect(token.RPAREN)
 		p.expectSemi()
 	} else {
-		list = append(list, f(nil, keyword, 0))
+		list = append(list, f(doc, keyword, 0))
 	}
 
 	return &ast.GenDecl{
