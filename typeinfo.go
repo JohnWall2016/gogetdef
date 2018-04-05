@@ -156,7 +156,13 @@ func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (def *definition, err error
 }
 
 func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition, err error) {
-	astFile, err := ti.importer.ParseFile(fileName)
+	astFile, err := ti.importer.ParseFile(fileName,
+		func(lbrace, rbrace int) bool {
+			if lbrace <= offset && offset <= rbrace {
+				return true
+			}
+			return false
+		})
 	if err != nil {
 		return
 	}

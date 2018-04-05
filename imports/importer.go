@@ -175,7 +175,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 		filenames = append(filenames, bp.TestGoFiles...)
 	}
 
-	files, err := p.parseFiles(bp.Dir, filenames, p.mode|parser.IgnoreFuncBodies)
+	files, err := p.parseFiles(bp.Dir, filenames, p.mode, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 		IgnoreFuncBodies: func(lbrace, rbrace token.Pos) bool {
 			return true
 		},
-		FakeImportC:      true,
+		FakeImportC: true,
 		// continue type-checking after the first error
 		Error: func(err error) {
 			if firstHardErr == nil && !err.(types.Error).Soft {
@@ -216,7 +216,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 	return pkg, nil
 }
 
-func (p *Importer) parseFiles(dir string, filenames []string, mode parser.Mode) ([]*ast.File, error) {
+func (p *Importer) parseFiles(dir string, filenames []string, mode parser.Mode, parseFuncBodies parser.InFuncBodies) ([]*ast.File, error) {
 	open := p.ctxt.OpenFile // possibly nil
 
 	files := make([]*ast.File, len(filenames))
@@ -237,7 +237,7 @@ func (p *Importer) parseFiles(dir string, filenames []string, mode parser.Mode) 
 						errors[i] = fmt.Errorf("opening package file %s failed (%v)", filepath, err)
 						return
 					}
-					files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, mode)
+					files[i], errors[i] = parser.ParseFile(p.fset, filepath, src, mode, parseFuncBodies)
 					src.Close() // ignore Close error - parsing may have succeeded which is all we need
 				} else {
 					// Special-case when ctxt doesn't provide a custom OpenFile and use the
@@ -245,7 +245,7 @@ func (p *Importer) parseFiles(dir string, filenames []string, mode parser.Mode) 
 					// bit faster than opening the file and providing an io.ReaderCloser in
 					// both cases.
 					// TODO(gri) investigate performance difference (issue #19281)
-					files[i], errors[i] = parser.ParseFile(p.fset, filepath, nil, mode)
+					files[i], errors[i] = parser.ParseFile(p.fset, filepath, nil, mode, parseFuncBodies)
 				}
 				if errors[i] == nil {
 					p.astPkgs.cacheFile(filepath, files[i])
@@ -308,8 +308,8 @@ func (p *Importer) openFile(path string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }
 
-func (p *Importer) ParseFile(fileName string) (*ast.File, error) {
-	astFiles, err := p.parseFiles("", []string{fileName}, p.mode)
+func (p *Importer) ParseFile(fileName string, parseFuncBodies parser.InFuncBodies) (*ast.File, error) {
+	astFiles, err := p.parseFiles("", []string{fileName}, p.mode, parseFuncBodies)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +327,7 @@ func (p *Importer) ParseDir(dir string) ([]*ast.File, error) {
 			fileNames = append(fileNames, f.Name())
 		}
 	}
-	return p.parseFiles(dir, fileNames, p.mode|parser.IgnoreFuncBodies)
+	return p.parseFiles(dir, fileNames, p.mode, nil)
 }
 
 func (p *Importer) PathEnclosingInterval(fileName string, start, end token.Pos) []ast.Node {

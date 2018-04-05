@@ -56,7 +56,6 @@ const (
 	PackageClauseOnly Mode             = 1 << iota // stop parsing after package clause
 	ImportsOnly                                    // stop parsing after import declarations
 	ParseComments                                  // parse comments and add them to AST
-	IgnoreFuncBodies                               // ignore to parse function bodies
 	Trace                                          // print a trace of parsed productions
 	DeclarationErrors                              // report declaration errors
 	SpuriousErrors                                 // same as AllErrors, for backward-compatibility
@@ -82,7 +81,7 @@ const (
 // representing the fragments of erroneous source code). Multiple errors
 // are returned via a scanner.ErrorList which is sorted by file position.
 //
-func ParseFile(fset *token.FileSet, filename string, src interface{}, mode Mode) (f *ast.File, err error) {
+func ParseFile(fset *token.FileSet, filename string, src interface{}, mode Mode, parseFuncBodies InFuncBodies) (f *ast.File, err error) {
 	if fset == nil {
 		panic("parser.ParseFile: no token.FileSet provided (fset == nil)")
 	}
@@ -93,7 +92,7 @@ func ParseFile(fset *token.FileSet, filename string, src interface{}, mode Mode)
 		return nil, err
 	}
 
-	var p parser
+	var p = parser{parseFuncBodies: parseFuncBodies}
 	defer func() {
 		if e := recover(); e != nil {
 			// resume same panic if it's not a bailout
@@ -137,7 +136,7 @@ func ParseFile(fset *token.FileSet, filename string, src interface{}, mode Mode)
 // returned. If a parse error occurred, a non-nil but incomplete map and the
 // first error encountered are returned.
 //
-func ParseDir(fset *token.FileSet, path string, filter func(os.FileInfo) bool, mode Mode) (pkgs map[string]*ast.Package, first error) {
+func ParseDir(fset *token.FileSet, path string, filter func(os.FileInfo) bool, mode Mode, parseFuncBodies InFuncBodies) (pkgs map[string]*ast.Package, first error) {
 	fd, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -153,7 +152,7 @@ func ParseDir(fset *token.FileSet, path string, filter func(os.FileInfo) bool, m
 	for _, d := range list {
 		if strings.HasSuffix(d.Name(), ".go") && (filter == nil || filter(d)) {
 			filename := filepath.Join(path, d.Name())
-			if src, err := ParseFile(fset, filename, nil, mode); err == nil {
+			if src, err := ParseFile(fset, filename, nil, mode, parseFuncBodies); err == nil {
 				name := src.Name.Name
 				pkg, found := pkgs[name]
 				if !found {

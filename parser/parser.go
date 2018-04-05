@@ -18,13 +18,15 @@ package parser
 
 import (
 	"fmt"
+	"github.com/JohnWall2016/gogetdef/scanner"
 	"go/ast"
-	"go/scanner"
 	"go/token"
 	"strconv"
 	"strings"
 	"unicode"
 )
+
+type InFuncBodies func(lbrace, rbrace int) bool
 
 // The parser structure holds the parser's internal state.
 type parser struct {
@@ -68,6 +70,8 @@ type parser struct {
 	// (maintained by open/close LabelScope)
 	labelScope  *ast.Scope     // label scope for current function
 	targetStack [][]*ast.Ident // stack of unresolved labels
+
+	parseFuncBodies InFuncBodies
 }
 
 func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mode) {
@@ -255,6 +259,14 @@ func (p *parser) next0() {
 	}
 
 	p.pos, p.tok, p.lit = p.scanner.Scan()
+}
+
+func (p *parser) save() scanner.State {
+	return p.scanner.Save()
+}
+
+func (p *parser) restore(state scanner.State) {
+	p.scanner.Restore(state)
 }
 
 // Consume a comment and return it and the line on which it ends.
@@ -1070,7 +1082,7 @@ func (p *parser) parseStmtList() (list []ast.Stmt) {
 	return
 }
 
-func (p *parser) parseBody(scope *ast.Scope, force bool) *ast.BlockStmt {
+func (p *parser) parseBody(scope *ast.Scope) *ast.BlockStmt {
 	if p.trace {
 		defer un(trace(p, "Body"))
 	}
@@ -1079,29 +1091,34 @@ func (p *parser) parseBody(scope *ast.Scope, force bool) *ast.BlockStmt {
 		rbrace token.Pos
 		list   []ast.Stmt
 	)
+	st := p.save()
 	lbrace := p.expect(token.LBRACE)
-	if !force && p.mode&IgnoreFuncBodies != 0 {
-		nest := 1
-		for p.tok != token.EOF {
-			switch p.tok {
-			case token.LBRACE:
-				nest++
-			case token.RBRACE:
-				nest--
-			}
-			if nest == 0 {
-				rbrace = p.expect(token.RBRACE)
-				break
-			}
-			p.next()
+	nest := 1
+	for p.tok != token.EOF {
+		switch p.tok {
+		case token.LBRACE:
+			nest++
+		case token.RBRACE:
+			nest--
 		}
-	} else {
-		p.topScope = scope // open function scope
-		p.openLabelScope()
-		list = p.parseStmtList()
-		p.closeLabelScope()
-		p.closeScope()
-		rbrace = p.expect(token.RBRACE)
+		if nest == 0 {
+			rbrace = p.expect(token.RBRACE)
+			break
+		}
+		p.next()
+	}
+	if p.parseFuncBodies != nil {
+		lb := p.scanner.Offset(lbrace)
+		rb := p.scanner.Offset(rbrace)
+		if p.parseFuncBodies(lb, rb) {
+			p.restore(st)
+			p.topScope = scope // open function scope
+			p.openLabelScope()
+			list = p.parseStmtList()
+			p.closeLabelScope()
+			p.closeScope()
+			rbrace = p.expect(token.RBRACE)
+		}
 	}
 	return &ast.BlockStmt{Lbrace: lbrace, List: list, Rbrace: rbrace}
 }
@@ -1135,7 +1152,7 @@ func (p *parser) parseFuncTypeOrLit() ast.Expr {
 	}
 
 	p.exprLev++
-	body := p.parseBody(scope, true)
+	body := p.parseBody(scope)
 	p.exprLev--
 
 	return &ast.FuncLit{Type: typ, Body: body}
@@ -2409,7 +2426,7 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 
 	var body *ast.BlockStmt
 	if p.tok == token.LBRACE {
-		body = p.parseBody(scope, false)
+		body = p.parseBody(scope)
 	}
 	p.expectSemi()
 

@@ -15,7 +15,7 @@ func (ti *typeInfo) builtinFile(fs *token.FileSet) (*ast.File, error) {
 	if err != nil {
 		panic(err)
 	}
-	return ti.importer.ParseFile(filepath.Join(bpkg.Dir, "builtin.go"))
+	return ti.importer.ParseFile(filepath.Join(bpkg.Dir, "builtin.go"), nil)
 }
 
 func readFuncType(ft *ast.FuncType) string {

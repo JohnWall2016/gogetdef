@@ -342,7 +342,8 @@ func (check *Checker) funcDecl(obj *Func, decl *declInfo) {
 
 	// function body must be type-checked after global declarations
 	// (functions implemented elsewhere have no body)
-	if fdecl.Body != nil && !check.conf.IgnoreFuncBodies(fdecl.Body.Lbrace, fdecl.Body.Rbrace) {
+	if fdecl.Body != nil && check.conf.IgnoreFuncBodies != nil &&
+		!check.conf.IgnoreFuncBodies(fdecl.Body.Lbrace, fdecl.Body.Rbrace) {
 		check.later(obj.name, decl, sig, fdecl.Body)
 	}
 }
