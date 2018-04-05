@@ -229,12 +229,29 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 
 	path, _ := imports.PathEnclosingInterval(astFile, pos, pos)
 
-	for _, node := range path {
+	for i, node := range path {
 		switch n := node.(type) {
 		case *ast.Ident:
 			var obj types.Object
 			if obj = ti.ObjectOf(n); obj == nil {
 				continue
+			}
+			if v, ok := obj.(*types.Var); ok {
+				if v.IsField() && v.Anonymous() {
+					if i + 1 < len(path) {
+						p := path[i+1]
+						if _, ok := p.(*ast.SelectorExpr); ok {
+							if i + 2 < len(path) {
+								p = path[i+2]
+							}
+						}
+						if _, ok := p.(*ast.Field); ok {
+							if tn, ok := v.Type().(*types.Named); ok {
+								obj = tn.Obj()
+							}
+						}
+					}
+				}
 			}
 			return ti.ident(obj)
 		case *ast.ImportSpec:
