@@ -183,9 +183,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 	// type-check package files
 	var firstHardErr error
 	conf := types.Config{
-		ParseFuncBodies: func(lbrace, rbrace token.Pos) bool {
-			return false
-		},
+		CheckFuncBodies: nil,
 		FakeImportC: true,
 		// continue type-checking after the first error
 		Error: func(err error) {

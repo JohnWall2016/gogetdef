@@ -1039,7 +1039,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 			//           the exact position where the closure appears
 			//           in the source; e.g., variables declared below
 			//           must not be visible).
-			if e.Body != nil  && check.conf.ParseFuncBodies != nil && check.conf.ParseFuncBodies(e.Body.Lbrace, e.Body.Rbrace) {
+			if e.Body != nil  && check.conf.CheckFuncBodies != nil && check.conf.CheckFuncBodies(e.Body.Lbrace, e.Body.Rbrace) {
 				check.funcBody(check.decl, "", sig, e.Body)				
 			}
 			x.mode = value

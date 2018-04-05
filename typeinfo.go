@@ -210,7 +210,7 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 
 	conf := &types.Config{
 		Importer: ti.importer,
-		ParseFuncBodies: func(lbrace, rbrace token.Pos) bool {
+		CheckFuncBodies: func(lbrace, rbrace token.Pos) bool {
 			if lbrace <= pos && pos <= rbrace {
 				return true
 			}
