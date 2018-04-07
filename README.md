@@ -1,7 +1,7 @@
 gogetdef
 ========
 
-Another godef[https://github.com/rogpeppe/godef] or maybe gogetdoc[https://github.com/zmb3/gogetdoc].
+Another [godef] or maybe [gogetdoc].
 
 ## Install
 
@@ -22,3 +22,6 @@ M-x gogetdef-describe
 M-x gogetdef-jump
 
 M-x gogetdef-all
+
+[godef]: https://github.com/rogpeppe/godef
+[gogetdoc]: https://github.com/zmb3/gogetdoc
