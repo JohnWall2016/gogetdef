@@ -18,5 +18,7 @@ Add the line below to ~/.emacs
 Restart emacs and open a go code file
 
 M-x gogetdef-describe
+
 M-x gogetdef-jump
+
 M-x gogetdef-all
