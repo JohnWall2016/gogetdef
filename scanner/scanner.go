@@ -14,7 +14,6 @@ import (
 	"go/token"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"unicode"
 	"unicode/utf8"
 )
@@ -40,8 +39,6 @@ type Scanner struct {
 
 	// scanning state
 	State
-	
-	sync.RWMutex
 }
 
 type State struct {
@@ -772,14 +769,10 @@ scanAgain:
 }
 
 func (s *Scanner) Save() State {
-	s.RLock()
-	defer s.RUnlock()
 	return s.State
 }
 
 func (s *Scanner) Restore(state State) {
-	s.Lock()
-	defer s.Unlock()
 	s.State = state
 }
 
