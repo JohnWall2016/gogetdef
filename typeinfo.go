@@ -17,8 +17,6 @@ import (
 	"strings"
 )
 
-var _ = fmt.Printf
-
 type typeInfo struct {
 	types.Info
 	fset     *token.FileSet
@@ -51,12 +49,12 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 	return info
 }
 
-func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
-	def = &definition{}
+func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
+	dcl = &declaration{}
 
-	def.decl = obj.String()
+	dcl.typ = obj.String()
 	if p := ti.fset.Position(obj.Pos()); p.IsValid() {
-		def.pos = p.String()
+		dcl.pos = p.String()
 	}
 
 	if file := ti.fset.File(obj.Pos()); file != nil {
@@ -71,12 +69,12 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 			default:
 				break
 			}
-			def.decl = formatNode(node, obj, ti.fset, *showall)
+			dcl.typ = formatNode(node, obj, ti.fset, *showall)
 			break
 		}
 		if *showall {
 			if obj.Pkg() != nil {
-				def.imprt = obj.Pkg().Path()
+				dcl.imprt = obj.Pkg().Path()
 			}
 			for _, node := range nodes {
 				//fmt.Printf("for %s: found %T\n%#v\n", id.Name, node, node)
@@ -84,31 +82,31 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 				case *ast.Ident:
 					continue
 				case *ast.FuncDecl:
-					def.doc = n.Doc.Text()
+					dcl.doc = n.Doc.Text()
 					return
 				case *ast.Field:
 					if n.Doc != nil {
-						def.doc = n.Doc.Text()
+						dcl.doc = n.Doc.Text()
 					} else if n.Comment != nil {
-						def.doc = n.Comment.Text()
+						dcl.doc = n.Comment.Text()
 					}
 					return
 				case *ast.TypeSpec:
 					if n.Doc != nil {
-						def.doc = n.Doc.Text()
+						dcl.doc = n.Doc.Text()
 						return
 					}
 					if n.Comment != nil {
-						def.doc = n.Comment.Text()
+						dcl.doc = n.Comment.Text()
 						return
 					}
 				case *ast.ValueSpec:
 					if n.Doc != nil {
-						def.doc = n.Doc.Text()
+						dcl.doc = n.Doc.Text()
 						return
 					}
 					if n.Comment != nil {
-						def.doc = n.Comment.Text()
+						dcl.doc = n.Comment.Text()
 						return
 					}
 				case *ast.GenDecl:
@@ -116,11 +114,11 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 					if c, ok := obj.(*types.Const); ok {
 						constValue = c.Val().ExactString()
 					}
-					if def.doc == "" && n.Doc != nil {
-						def.doc = n.Doc.Text()
+					if dcl.doc == "" && n.Doc != nil {
+						dcl.doc = n.Doc.Text()
 					}
 					if constValue != "" {
-						def.doc += fmt.Sprintf("\nConstant Value: %s", constValue)
+						dcl.doc += fmt.Sprintf("\nConstant Value: %s", constValue)
 					}
 					return
 				default:
@@ -140,25 +138,25 @@ func (ti *typeInfo) ident(obj types.Object) (def *definition, err error) {
 	return
 }
 
-func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (def *definition, err error) {
+func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (dcl *declaration, err error) {
 	path, _ := strconv.Unquote(spec.Path.Value)
 	bpkg, err := build.Import(path, "", build.ImportComment)
 	if err != nil {
 		return
 	}
-	def = &definition{decl: "package " + bpkg.Name, pos: bpkg.Dir}
+	dcl = &declaration{typ: "package " + bpkg.Name, pos: bpkg.Dir}
 	if *showall {
 		astPkg, ok := ti.importer.GetCachedPackage(bpkg.Name)
 		if ok {
 			docPkg := doc.New(astPkg, path, 0)
-			def.doc = docPkg.Doc
-			def.imprt = path
+			dcl.doc = docPkg.Doc
+			dcl.imprt = path
 		}
 	}
 	return
 }
 
-func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition, err error) {
+func (ti *typeInfo) findDeclaration(fileName string, offset int) (dcl *declaration, err error) {
 	astFile, err := ti.importer.ParseFile(fileName,
 		func(lbrace, rbrace int) bool {
 			if lbrace <= offset && offset <= rbrace {
@@ -238,10 +236,10 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 			}
 			if v, ok := obj.(*types.Var); ok {
 				if v.IsField() && v.Anonymous() {
-					if i + 1 < len(path) {
+					if i+1 < len(path) {
 						p := path[i+1]
 						if _, ok := p.(*ast.SelectorExpr); ok {
-							if i + 2 < len(path) {
+							if i+2 < len(path) {
 								p = path[i+2]
 							}
 						}
@@ -278,7 +276,7 @@ func (ti *typeInfo) findDefinition(fileName string, offset int) (def *definition
 	return nil, cerr
 }
 
-func findDefinition(fileName string, offset int, archive io.Reader) (def *definition, err error) {
+func findDeclaration(fileName string, offset int, archive io.Reader) (dcl *declaration, err error) {
 	var overlay map[string][]byte
 	if archive != nil {
 		overlay, err = imports.ParseOverlayArchive(archive)
@@ -288,5 +286,5 @@ func findDefinition(fileName string, offset int, archive io.Reader) (def *defini
 	}
 	ti := newTypeInfo(overlay)
 
-	return ti.findDefinition(fileName, offset)
+	return ti.findDeclaration(fileName, offset)
 }

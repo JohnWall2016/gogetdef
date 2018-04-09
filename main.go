@@ -32,7 +32,6 @@ func main() {
 	flag.Parse()
 
 	filename, offset, err := parsePos(*pos)
-	//fmt.Printf("%s:%d\n", filename, offset)
 	if err != nil {
 		fmt.Print(err)
 		os.Exit(1)
@@ -43,18 +42,18 @@ func main() {
 		archive = os.Stdin
 	}
 
-	def, err := findDefinition(filename, int(offset), archive)
+	dcl, err := findDeclaration(filename, int(offset), archive)
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 
 	if *showall {
-		fmt.Print(def)
+		fmt.Print(dcl)
 	} else {
 		fmt.Println("gogetdef-return")
-		fmt.Println(def.pos)
-		fmt.Print(def.decl)
+		fmt.Println(dcl.pos)
+		fmt.Print(dcl.typ)
 	}
 }
 

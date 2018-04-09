@@ -6,17 +6,17 @@ import (
 	"go/doc"
 )
 
-type definition struct {
-	decl, pos  string
+type declaration struct {
+	typ, pos   string
 	imprt, doc string
 }
 
-func (d *definition) String() string {
+func (d *declaration) String() string {
 	buf := &bytes.Buffer{}
 	if d.imprt != "" {
 		fmt.Fprintf(buf, "import \"%s\"\n\n", d.imprt)
 	}
-	fmt.Fprintf(buf, "%s\n\n", d.decl)
+	fmt.Fprintf(buf, "%s\n\n", d.typ)
 	if d.doc == "" {
 		d.doc = "Undocumented."
 	}
