@@ -235,17 +235,30 @@ func (ti *typeInfo) findDeclaration(fileName string, offset int) (dcl *declarati
 				continue
 			}
 			if v, ok := obj.(*types.Var); ok {
-				if v.IsField() && v.Anonymous() {
+				if v.IsField() && v.Anonymous() { // embeded type field
 					if i+1 < len(path) {
 						p := path[i+1]
-						if _, ok := p.(*ast.SelectorExpr); ok {
-							if i+2 < len(path) {
-								p = path[i+2]
+						i += 1
+						if _, ok := p.(*ast.SelectorExpr); ok { // with a selector
+							if i+1 < len(path) {
+								p = path[i+1]
+								i += 1
 							}
 						}
+						if _, ok := p.(*ast.StarExpr); ok { // pointer type
+							if i+1 < len(path) {
+								p = path[i+1]
+							}
+						}
+						// if in a struct's declaration, find the embeded field's own type
 						if _, ok := p.(*ast.Field); ok {
-							if tn, ok := v.Type().(*types.Named); ok {
+							switch tn := v.Type().(type) {
+							case *types.Named:
 								obj = tn.Obj()
+							case *types.Pointer:
+								if tn, ok := tn.Elem().(*types.Named); ok {
+									obj = tn.Obj()
+								}
 							}
 						}
 					}
