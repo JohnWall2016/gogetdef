@@ -284,7 +284,7 @@ func (ti *typeInfo) findDeclaration(fileName string, offset int) (dcl *declarati
 	}
 	if cerr == nil {
 		//cerr = errors.New(fmt.Sprintf("can't found the node: %#v", node))
-		cerr = errors.New("can't find definition")
+		cerr = errors.New("can't find the declaration")
 	}
 	return nil, cerr
 }
