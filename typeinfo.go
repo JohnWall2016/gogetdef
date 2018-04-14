@@ -49,6 +49,28 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 	return info
 }
 
+func (ti *typeInfo) typeNode(obj types.Object) (path []ast.Node, node ast.Node) {
+	if file := ti.fset.File(obj.Pos()); file != nil {
+		path = ti.importer.PathEnclosingInterval(file.Name(), obj.Pos(), obj.Pos())
+		for _, node = range path {
+			switch node.(type) {
+			case *ast.Ident:
+				// continue ascending AST (searching for parent node of the identifier))
+				continue
+			default:
+				return
+			}
+		}
+	}
+	return nil, nil
+}
+
+type funcsByName []*types.Func
+
+func (p funcsByName) Len() int           { return len(p) }
+func (p funcsByName) Less(i, j int) bool { return p[i].Name() < p[j].Name() }
+func (p funcsByName) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
 func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
 	dcl = &declaration{}
 
@@ -57,72 +79,77 @@ func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
 		dcl.pos = p.String()
 	}
 
-	if file := ti.fset.File(obj.Pos()); file != nil {
-		nodes := ti.importer.PathEnclosingInterval(file.Name(), obj.Pos(), obj.Pos())
-		for _, node := range nodes {
-			switch node.(type) {
-			case *ast.Ident:
-				// continue ascending AST (searching for parent node of the identifier))
-				continue
-			case *ast.FuncDecl, *ast.GenDecl, *ast.Field, *ast.TypeSpec, *ast.ValueSpec:
-				// found the parent node
-			default:
-				break
-			}
-			dcl.typ = formatNode(node, obj, ti.fset, *showall)
-			break
-		}
+	nodes, node := ti.typeNode(obj)
+	if node != nil {
+		dcl.typ = formatNode(node, obj, ti.fset, *showall)
 		if *showall {
-			if obj.Pkg() != nil {
-				dcl.imprt = obj.Pkg().Path()
+			if s, ok := obj.Type().(*types.Named); ok {
+				var funcs funcsByName
+				for i := 0; i < s.NumMethods(); i++ {
+					funcs = append(funcs, s.Method(i))
+				}
+				sort.Sort(funcs)
+				for _, m := range funcs {
+					_, mnode := ti.typeNode(m)
+					if mnode != nil {
+						mtyp := formatNode(mnode, m, ti.fset, *showall)
+						dcl.mthds = append(dcl.mthds, mtyp)
+					}
+				}
 			}
-			for _, node := range nodes {
-				//fmt.Printf("for %s: found %T\n%#v\n", id.Name, node, node)
-				switch n := node.(type) {
-				case *ast.Ident:
-					continue
-				case *ast.FuncDecl:
-					dcl.doc = n.Doc.Text()
-					return
-				case *ast.Field:
-					if n.Doc != nil {
-						dcl.doc = n.Doc.Text()
-					} else if n.Comment != nil {
-						dcl.doc = n.Comment.Text()
-					}
-					return
-				case *ast.TypeSpec:
-					if n.Doc != nil {
+
+			if nodes != nil {
+				if obj.Pkg() != nil {
+					dcl.imprt = obj.Pkg().Path()
+				}
+				for _, node := range nodes {
+					//fmt.Printf("for %s: found %T\n%#v\n", id.Name, node, node)
+					switch n := node.(type) {
+					case *ast.Ident:
+						continue
+					case *ast.FuncDecl:
 						dcl.doc = n.Doc.Text()
 						return
-					}
-					if n.Comment != nil {
-						dcl.doc = n.Comment.Text()
+					case *ast.Field:
+						if n.Doc != nil {
+							dcl.doc = n.Doc.Text()
+						} else if n.Comment != nil {
+							dcl.doc = n.Comment.Text()
+						}
+						return
+					case *ast.TypeSpec:
+						if n.Doc != nil {
+							dcl.doc = n.Doc.Text()
+							return
+						}
+						if n.Comment != nil {
+							dcl.doc = n.Comment.Text()
+							return
+						}
+					case *ast.ValueSpec:
+						if n.Doc != nil {
+							dcl.doc = n.Doc.Text()
+							return
+						}
+						if n.Comment != nil {
+							dcl.doc = n.Comment.Text()
+							return
+						}
+					case *ast.GenDecl:
+						constValue := ""
+						if c, ok := obj.(*types.Const); ok {
+							constValue = c.Val().ExactString()
+						}
+						if dcl.doc == "" && n.Doc != nil {
+							dcl.doc = n.Doc.Text()
+						}
+						if constValue != "" {
+							dcl.doc += fmt.Sprintf("\nConstant Value: %s", constValue)
+						}
+						return
+					default:
 						return
 					}
-				case *ast.ValueSpec:
-					if n.Doc != nil {
-						dcl.doc = n.Doc.Text()
-						return
-					}
-					if n.Comment != nil {
-						dcl.doc = n.Comment.Text()
-						return
-					}
-				case *ast.GenDecl:
-					constValue := ""
-					if c, ok := obj.(*types.Const); ok {
-						constValue = c.Val().ExactString()
-					}
-					if dcl.doc == "" && n.Doc != nil {
-						dcl.doc = n.Doc.Text()
-					}
-					if constValue != "" {
-						dcl.doc += fmt.Sprintf("\nConstant Value: %s", constValue)
-					}
-					return
-				default:
-					return
 				}
 			}
 		}
