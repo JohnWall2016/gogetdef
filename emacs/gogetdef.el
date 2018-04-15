@@ -83,7 +83,34 @@ You can install gogetdef with 'go get -u github.com/JohnWall2016/gogetdef'."
                          (format "-pos=%s" posn)))
   (with-current-buffer out
     (goto-char (point-min))
+    (process-methods)
     (godoc-mode)
     (display-buffer (current-buffer) t))))
+
+(defun process-methods()
+  (let (beg end (methods ()) method)
+    (when (re-search-forward "\\[\\(:method:\\)\\(\\[[^|]*|[^|]*\\]\\)+\\]" nil t)
+      (setq beg (match-beginning 0) end (match-end 0))
+      (goto-char (match-end 1))
+      (while (re-search-forward "\\[\\([^|]*\\)|\\([^]|]*\\)\\]" nil t)
+        (add-to-list 'methods (list (match-string 1) (match-string 2)) t))
+      (delete-region beg end)
+      (while methods
+        (setq method (pop methods))
+        (insert-text-button (nth 0 method) 'type 'gogetdef-button 'args (nth 1 method))
+        (insert "\n"))
+      (goto-char (point-min)))))
+
+(define-button-type 'gogetdef-button
+  'follow-link t
+  'action (lambda (botton)
+            (let ((pos (button-get botton 'args)))
+              (push-mark)
+              (if (eval-when-compile (fboundp 'xref-push-marker-stack))
+                  ;; TODO: Integrate this facility with XRef.
+                  (xref-push-marker-stack)
+                (ring-insert find-tag-marker-ring (point-marker)))
+              (godef--find-file-line-column pos nil)
+              )))
 
 (provide 'gogetdef)

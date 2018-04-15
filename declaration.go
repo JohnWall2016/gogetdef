@@ -6,10 +6,16 @@ import (
 	"go/doc"
 )
 
+type typeAndPos struct {
+	typ, pos string
+}
+
 type declaration struct {
-	typ, pos   string
-	imprt, doc string
-	mthds      []string
+	name string
+	typeAndPos
+	imprt string
+	doc   string
+	mthds []*typeAndPos
 }
 
 func (d *declaration) String() string {
@@ -18,23 +24,16 @@ func (d *declaration) String() string {
 		fmt.Fprintf(buf, "import \"%s\"\n\n", d.imprt)
 	}
 	fmt.Fprintf(buf, "%s\n\n", d.typ)
-	/*if d.doc == "" {
-		d.doc = "Undocumented."
-	}*/
 	if d.doc != "" {
 		doc.ToText(buf, d.doc, "", "    ", 80)
 		fmt.Fprintln(buf)
 	}
-
 	if len(d.mthds) > 0 {
+		fmt.Fprintf(buf, "[:method:")
 		for _, m := range d.mthds {
-			fmt.Fprintf(buf, "%s\n", m)
+			fmt.Fprintf(buf, "[%s|%s]", m.typ, m.pos)
 		}
-		fmt.Fprintln(buf)
-	}
-
-	if d.pos != "" {
-		fmt.Fprintf(buf, "[%s]\n", d.pos)
+		fmt.Fprintf(buf, "]")
 	}
 	return buf.String()
 }

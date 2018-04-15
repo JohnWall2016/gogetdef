@@ -74,16 +74,23 @@ func (p funcsByName) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
 	dcl = &declaration{}
 
+	dcl.name = obj.Name()
 	dcl.typ = obj.String()
-	if p := ti.fset.Position(obj.Pos()); p.IsValid() {
-		dcl.pos = p.String()
+
+	objPos := func(obj types.Object) string {
+		if p := ti.fset.Position(obj.Pos()); p.IsValid() {
+			return p.String()
+		}
+		return ""
 	}
+
+	dcl.pos = objPos(obj)
 
 	nodes, node := ti.typeNode(obj)
 	if node != nil {
 		dcl.typ = formatNode(node, obj, ti.fset, *showall)
 		if *showall {
-			if s, ok := obj.Type().(*types.Named); ok {
+			if s, ok := obj.Type().(*types.Named); ok && s.NumMethods() > 0 {
 				var funcs funcsByName
 				for i := 0; i < s.NumMethods(); i++ {
 					funcs = append(funcs, s.Method(i))
@@ -93,7 +100,8 @@ func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
 					_, mnode := ti.typeNode(m)
 					if mnode != nil {
 						mtyp := formatNode(mnode, m, ti.fset, *showall)
-						dcl.mthds = append(dcl.mthds, mtyp)
+						mpos := objPos(m)
+						dcl.mthds = append(dcl.mthds, &typeAndPos{mtyp, mpos})
 					}
 				}
 			}
@@ -171,7 +179,7 @@ func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (dcl *declaration, err erro
 	if err != nil {
 		return
 	}
-	dcl = &declaration{typ: "package " + bpkg.Name, pos: bpkg.Dir}
+	dcl = &declaration{typeAndPos: typeAndPos{typ: "package " + bpkg.Name, pos: bpkg.Dir}}
 	if *showall {
 		astPkg, ok := ti.importer.GetCachedPackage(bpkg.Name)
 		if ok {
