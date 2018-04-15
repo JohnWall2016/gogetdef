@@ -105,12 +105,6 @@ You can install gogetdef with 'go get -u github.com/JohnWall2016/gogetdef'."
   'follow-link t
   'action (lambda (botton)
             (let ((pos (button-get botton 'args)))
-              (push-mark)
-              (if (eval-when-compile (fboundp 'xref-push-marker-stack))
-                  ;; TODO: Integrate this facility with XRef.
-                  (xref-push-marker-stack)
-                (ring-insert find-tag-marker-ring (point-marker)))
-              (godef--find-file-line-column pos nil)
-              )))
+              (godef--find-file-line-column pos t))))
 
 (provide 'gogetdef)
