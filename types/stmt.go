@@ -54,7 +54,7 @@ func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body
 	// declare a variable inside a function body if the variable is never used."
 	// (One could check each scope after use, but that distributes this check
 	// over several places because CloseScope is not always called explicitly.)
-	if check.mode&NoCheckUsage != 0 {
+	if check.mode&NoCheckUsage == 0 {
 		check.usage(sig.scope)
 	}
 }

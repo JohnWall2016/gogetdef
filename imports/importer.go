@@ -107,9 +107,6 @@ func (p *Importer) Import(path string) (*types.Package, error) {
 // Packages that are not comprised entirely of pure Go files may fail to import because the
 // type checker may not be able to determine all exported entities (e.g. due to cgo dependencies).
 func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*types.Package, error) {
-	if mode != 0 {
-		panic("non-zero import mode")
-	}
 	// determine package path (do vendor resolution)
 	var bp *build.Package
 	var err error
