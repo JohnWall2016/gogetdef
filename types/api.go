@@ -66,6 +66,11 @@ type Importer interface {
 // ImportMode is reserved for future use.
 type ImportMode int
 
+const (
+	NoCheckCycleInDecl ImportMode = 1 << iota
+	NoCheckUsage
+)
+
 // An ImporterFrom resolves import paths to packages; it
 // supports vendoring per https://golang.org/s/go15vendor.
 // Use go/importer to obtain an ImporterFrom implementation.
@@ -343,9 +348,9 @@ func (init *Initializer) String() string {
 // The package is specified by a list of *ast.Files and corresponding
 // file set, and the package path the package is identified with.
 // The clean path must not be empty or dot (".").
-func (conf *Config) Check(path string, fset *token.FileSet, files []*ast.File, info *Info) (*Package, error) {
+func (conf *Config) Check(path string, fset *token.FileSet, files []*ast.File, info *Info, mode ImportMode) (*Package, error) {
 	pkg := NewPackage(path, "")
-	return pkg, NewChecker(conf, fset, pkg, info).Files(files)
+	return pkg, NewChecker(conf, fset, pkg, info, mode).Files(files)
 }
 
 // AssertableTo reports whether a value of type V can be asserted to have type T.

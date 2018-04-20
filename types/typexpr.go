@@ -71,15 +71,17 @@ func (check *Checker) ident(x *operand, e *ast.Ident, def *Named, path []*TypeNa
 		x.mode = typexpr
 		// check for cycle
 		// (it's ok to iterate forward because each named type appears at most once in path)
-		for _/*i*/, prev := range path {
+		for i, prev := range path {
 			if prev == obj {
-				//check.errorf(obj.pos, "illegal cycle in declaration of %s", obj.name)
-				//// print cycle
-				//for _, obj := range path[i:] {
-				//	check.errorf(obj.Pos(), "\t%s refers to", obj.Name()) // secondary error, \t indented
-				//}
-				//check.errorf(obj.Pos(), "\t%s", obj.Name())
-				//// maintain x.mode == typexpr despite error
+				if check.mode&NoCheckCycleInDecl != 0 {
+					check.errorf(obj.pos, "illegal cycle in declaration of %s", obj.name)
+					// print cycle
+					for _, obj := range path[i:] {
+						check.errorf(obj.Pos(), "\t%s refers to", obj.Name()) // secondary error, \t indented
+					}
+					check.errorf(obj.Pos(), "\t%s", obj.Name())
+					// maintain x.mode == typexpr despite error
+				}
 				typ = Typ[Invalid]
 				break
 			}

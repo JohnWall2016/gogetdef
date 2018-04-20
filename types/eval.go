@@ -71,7 +71,7 @@ func Eval(fset *token.FileSet, pkg *Package, pos token.Pos, expr string) (TypeAn
 	}
 
 	// initialize checker
-	check := NewChecker(nil, fset, pkg, nil)
+	check := NewChecker(nil, fset, pkg, nil, 0)
 	check.scope = scope
 	check.pos = pos
 	defer check.handleBailout(&err)

@@ -97,7 +97,7 @@ var importing types.Package
 
 // Import(path) is a shortcut for ImportFrom(path, "", 0).
 func (p *Importer) Import(path string) (*types.Package, error) {
-	return p.ImportFrom(path, "", 0)
+	return p.ImportFrom(path, "", types.NoCheckCycleInDecl|types.NoCheckUsage)
 }
 
 // ImportFrom imports the package with the given import path resolved from the given srcDir,
@@ -194,7 +194,7 @@ func (p *Importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*type
 		Importer: p,
 		Sizes:    p.sizes,
 	}
-	pkg, err = conf.Check(bp.ImportPath, p.fset, files, p.info)
+	pkg, err = conf.Check(bp.ImportPath, p.fset, files, p.info, mode)
 	if err != nil {
 		// If there was a hard error it is possibly unsafe
 		// to use the package as it may not be fully populated.

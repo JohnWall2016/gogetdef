@@ -258,7 +258,7 @@ func (ti *typeInfo) findDeclaration(fileName string, offset int) (dcl *declarati
 		},
 	}
 	tpkg := types.NewPackage(pkgName, "")
-	cerr := types.NewChecker(conf, ti.fset, tpkg, &ti.Info).Files(chkFiles)
+	cerr := types.NewChecker(conf, ti.fset, tpkg, &ti.Info, types.NoCheckUsage).Files(chkFiles)
 
 	path, _ := imports.PathEnclosingInterval(astFile, pos, pos)
 

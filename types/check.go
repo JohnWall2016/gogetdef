@@ -98,6 +98,8 @@ type Checker struct {
 
 	// debugging
 	indent int // indentation for tracing
+
+	mode ImportMode
 }
 
 // addUnusedImport adds the position of a dot-imported package
@@ -156,7 +158,7 @@ func (check *Checker) delay(f func()) {
 
 // NewChecker returns a new Checker instance for a given package.
 // Package files may be added incrementally via checker.Files.
-func NewChecker(conf *Config, fset *token.FileSet, pkg *Package, info *Info) *Checker {
+func NewChecker(conf *Config, fset *token.FileSet, pkg *Package, info *Info, mode ImportMode) *Checker {
 	// make sure we have a configuration
 	if conf == nil {
 		conf = new(Config)
@@ -174,6 +176,7 @@ func NewChecker(conf *Config, fset *token.FileSet, pkg *Package, info *Info) *Ch
 		Info:   info,
 		objMap: make(map[Object]*declInfo),
 		impMap: make(map[importKey]*Package),
+		mode:   mode,
 	}
 }
 
