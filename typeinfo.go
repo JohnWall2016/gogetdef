@@ -49,9 +49,9 @@ func newTypeInfo(overlay map[string][]byte) *typeInfo {
 	return info
 }
 
-func (ti *typeInfo) typeNode(obj types.Object) (path []ast.Node, node ast.Node) {
-	if file := ti.fset.File(obj.Pos()); file != nil {
-		path = ti.importer.PathEnclosingInterval(file.Name(), obj.Pos(), obj.Pos())
+func (ti *typeInfo) nodeOfPos(pos token.Pos) (path []ast.Node, node ast.Node) {
+	if file := ti.fset.File(pos); file != nil {
+		path = ti.importer.PathEnclosingInterval(file.Name(), pos, pos)
 		for _, node = range path {
 			switch node.(type) {
 			case *ast.Ident:
@@ -72,11 +72,6 @@ func (p funcsByName) Less(i, j int) bool { return p[i].Name() < p[j].Name() }
 func (p funcsByName) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
-	dcl = &declaration{}
-
-	dcl.name = obj.Name()
-	dcl.typ = obj.String()
-
 	objPos := func(obj types.Object) string {
 		if p := ti.fset.Position(obj.Pos()); p.IsValid() {
 			return p.String()
@@ -84,9 +79,11 @@ func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
 		return ""
 	}
 
+	dcl = &declaration{name: obj.Name()}
+	dcl.typ = obj.String()
 	dcl.pos = objPos(obj)
 
-	nodes, node := ti.typeNode(obj)
+	nodes, node := ti.nodeOfPos(obj.Pos())
 	if node != nil {
 		dcl.typ = formatNode(node, obj, ti.fset, *showall)
 		if *showall {
@@ -97,7 +94,7 @@ func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
 				}
 				sort.Sort(funcs)
 				for _, m := range funcs {
-					_, mnode := ti.typeNode(m)
+					_, mnode := ti.nodeOfPos(m.Pos())
 					if mnode != nil {
 						mtyp := formatNode(mnode, m, ti.fset, *showall)
 						mpos := objPos(m)
@@ -179,7 +176,9 @@ func (ti *typeInfo) importSpec(spec *ast.ImportSpec) (dcl *declaration, err erro
 	if err != nil {
 		return
 	}
-	dcl = &declaration{typeAndPos: typeAndPos{typ: "package " + bpkg.Name, pos: bpkg.Dir}}
+	dcl = &declaration{name: bpkg.Name}
+	dcl.typ = "package " + bpkg.Name
+	dcl.pos = bpkg.Dir
 	if *showall {
 		astPkg, ok := ti.importer.GetCachedPackage(bpkg.Name)
 		if ok {
