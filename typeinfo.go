@@ -98,7 +98,7 @@ func (ti *typeInfo) ident(obj types.Object) (dcl *declaration, err error) {
 					if mnode != nil {
 						mtyp := formatNode(mnode, m, ti.fset, *showall)
 						mpos := objPos(m)
-						dcl.mthds = append(dcl.mthds, &typeAndPos{mtyp, mpos})
+						dcl.mthds = append(dcl.mthds, &typePos{mtyp, mpos})
 					}
 				}
 			}

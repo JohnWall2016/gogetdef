@@ -6,16 +6,16 @@ import (
 	"go/doc"
 )
 
-type typeAndPos struct {
+type typePos struct {
 	typ, pos string
 }
 
 type declaration struct {
 	name string
-	typeAndPos
+	typePos
 	imprt string
 	doc   string
-	mthds []*typeAndPos
+	mthds []*typePos
 }
 
 func (d *declaration) String() string {
